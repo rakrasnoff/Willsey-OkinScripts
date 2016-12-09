@@ -4,9 +4,9 @@ library(Biobase)
 library(GEOquery)
 options(stringsAsFactors = TRUE)
 
-datdir <-"~/Documents/Current/Willsey/Willsey&OkinProject"
-wrkdir <-"~/Documents/Current/Willsey/Willsey&OkinProject/"
-outdir <-"~/Documents/Current/Willsey/Willsey&OkinProject/"
+datdir <-"~/Documents/Willsey-OkinProject/MacExpDat"
+wrkdir <-"~/Documents/Willsey-OkinProject/MacExpDat"
+outdir <-"~/Documents/Willsey-OkinProject/MacExpDat"
 
 info <- getGEO(filename = file.path(datdir, "GSE21764_family.soft.gz"), GSEMatrix=FALSE)
 Meta(info)
@@ -16,7 +16,7 @@ show(gse)
 #annotation(gse)
 #colnames(fData(gse))
 show(pData(phenoData(expSet[[1]]))[1:5,c(1,6,8)])
-expDat <- (exprs(expSet[[1]]))
+expDat <- (exprs(eset[[1]]))
 head(expDat)
 nrow(expDat)
 

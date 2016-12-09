@@ -29,4 +29,4 @@ CPPstats$max <- c(max(CPPtable$Rs), max(CPPtable$Plength), max(CPPtable$Rpercent
 CPPtable[,c(1,2,7)]
 
 write.table(CPPtable, "humanMouseNaturalCppsArgDat.txt", sep = "\t", row.names = FALSE, quote = FALSE)
-write.table(CPPstats, "humanMouseNaturalCppStats.txt", sep = "\t", row.names = FALSE, quote = FALSE)
+write.table(CPPstats, "humanMouseNaturalCppStats.txt", sep = "\t", row.names = TRUE, quote = FALSE)
