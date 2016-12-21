@@ -49,6 +49,9 @@ head(macExpDat)
 write.table(macExpDatAvg, file=file.path(outdir, "macExpDatAvg.txt"), sep = "\t", quote = F)
 write.table(macExpDat, file = file.path(outdir, "macExpDat.txt"), sep = "\t", quote = F)
 
+
+
+
 #load list of mouse peptidases, with gene ids available
 mousePeps <- read.delim(file.path(datdir, "mousePeptidases.txt"))
 head(mousePeps)
