@@ -56,12 +56,12 @@ write.table(macExpDat, file = file.path(outdir, "macExpDat.txt"), sep = "\t", qu
 ################### Filtering ##################
 ####################
 #Look at expression in macrophages
-datdir <-"~/Documents/Willsey-OkinProject/MacExpDat"
+datdir <-"~/Dropbox/WillseyLab/CPPs/MacExpDat"
 wrkdir <-"~/Documents/Willsey-OkinProject/MacExpDat"
-outdir <-"~/Documents/Willsey-OkinProject/MacExpDat"
+outdir <-"~/Dropbox/WillseyLab/CPPs/MacExpDat"
 
 #first, need to translate macrophage expression data to ensembl IDs
-macExpDat <- read.delim(file.path(outdir, "macExpDat.txt"))
+macExpDat <- read.delim(file.path(datdir, "macExpDat.txt"))
 macExpDat$Entrez_Gene_ID <- as.character(macExpDat$Entrez_Gene_ID)
 
 mkeys <- (keys(org.Mm.eg.db, keytype="ENTREZID"))
@@ -74,35 +74,37 @@ macExpEns <- left_join(macExpDat, key, by=c("Entrez_Gene_ID" = "ENTREZID"))
 head(macExpEns)
 tail(macExpEns)
 
-#now check expression
-macExpEns <- macExpEns[,c(2:14,16)]
-macExpList <- list(macExpEns[,c(4:13)])
-summary(unlist(macExpList)) #getting quartiles
+write.table(macExpEns, file.path(outdir, "macExpEnsembl.txt"), sep = "\t", quote=F)
 
-##now just looking at maxes
-maxMacExp <- apply(macExpEns[,c(4:13)], 1, max)
-summary(maxMacExp)
-###
-
-checkMacExp <- left_join(AAbyRc30Trim, macExpEns, by=c("gId" = "ENSEMBL"))
-head(checkMacExp)
-dim(checkMacExp)
-checkMacExp <- checkMacExp[!duplicated(checkMacExp$seq),]
-head(checkMacExp)
-dim(checkMacExp)
-DF <- data.frame(matrix(unlist(checkMacExp), nrow=nrow(checkMacExp)),stringsAsFactors=FALSE)
-names(DF) <- names(checkMacExp)
-head(DF)
-checkMacExp <- DF
-checkMacExp <- checkMacExp[complete.cases(checkMacExp),]
-dim(checkMacExp)
-maxMacExp <- apply(checkMacExp[,c(10:20)], 1, max)
-filtMacExp <- filter(checkMacExp, maxMacExp >= 122.1)
-dim(filtMacExp)
-
-###check enrichment
-sum(mouseCPPs$mouseEnsembl %in% checkMacExp$gId)
-/nrow(macExpEns)
-sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
-filtMacExp[filtMacExp$gId %in% mouseCPPs$mouseEnsembl,]
-
+# #now check expression
+# macExpEns <- macExpEns[,c(2:14,16)]
+# macExpList <- list(macExpEns[,c(4:13)])
+# summary(unlist(macExpList)) #getting quartiles
+# 
+# ##now just looking at maxes
+# maxMacExp <- apply(macExpEns[,c(4:13)], 1, max)
+# summary(maxMacExp)
+# ###
+# 
+# checkMacExp <- left_join(AAbyRc30Trim, macExpEns, by=c("gId" = "ENSEMBL"))
+# head(checkMacExp)
+# dim(checkMacExp)
+# checkMacExp <- checkMacExp[!duplicated(checkMacExp$seq),]
+# head(checkMacExp)
+# dim(checkMacExp)
+# DF <- data.frame(matrix(unlist(checkMacExp), nrow=nrow(checkMacExp)),stringsAsFactors=FALSE)
+# names(DF) <- names(checkMacExp)
+# head(DF)
+# checkMacExp <- DF
+# checkMacExp <- checkMacExp[complete.cases(checkMacExp),]
+# dim(checkMacExp)
+# maxMacExp <- apply(checkMacExp[,c(10:20)], 1, max)
+# filtMacExp <- filter(checkMacExp, maxMacExp >= 122.1)
+# dim(filtMacExp)
+# 
+# ###check enrichment
+# sum(mouseCPPs$mouseEnsembl %in% checkMacExp$gId)
+# /nrow(macExpEns)
+# sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
+# filtMacExp[filtMacExp$gId %in% mouseCPPs$mouseEnsembl,]
+# 

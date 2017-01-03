@@ -53,31 +53,31 @@ fast30 <- dataframe2fas(AA4Fasta[c(58001:60000),], file = "~/Dropbox/WillseyLab/
 fast31 <- dataframe2fas(AA4Fasta[c(60001:61418),], file = "~/Dropbox/WillseyLab/CPPs/AAs31.fa")
 ##
 
-####
-datdir <- "~/Dropbox/WillseyLab/CPPs/sigPepFiles"
-files <- dir(datdir)
-
-SPs <- lapply(files, function(x) { 
-  SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/sigPepFiles", x[i]))
-})
-head(SPs[[1]])
-head(SPs[[2]])
-
-head(AA2)
-
-for (i in 2:31){
-  names(SPs[[i]]) <- names(SPs[[1]])
-  SPs[[i]] <- SPs[[i]][,c(1:12)]
-}
-summary(SPs)
-
-AAsp <- rbind.fill(SPs)
-dim(AAsp)
-AAsp2 <- left_join(AA2, AAsp, by=c("tId"= "name"))
-dim(AAsp2)
-head(AAsp2)
-names(AAsp2) <- c("tId", "gId", "seq", "Cmax", "pos", "Ymax", "pos.1", "Smax", "pos.2", "Smean", "D", "SP", "Dmaxcut", "Networks.used")
-AAbySP <- AAsp2[AAsp2$SP == "Y",]
-dim(AAbySP)
-
-
+# ####
+# datdir <- "~/Dropbox/WillseyLab/CPPs/sigPepFiles"
+# files <- dir(datdir)
+# 
+# SPs <- lapply(files, function(x) { 
+#   SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/sigPepFiles", x[i]))
+# })
+# head(SPs[[1]])
+# head(SPs[[2]])
+# 
+# head(AA2)
+# 
+# for (i in 2:31){
+#   names(SPs[[i]]) <- names(SPs[[1]])
+#   SPs[[i]] <- SPs[[i]][,c(1:12)]
+# }
+# summary(SPs)
+# 
+# AAsp <- rbind.fill(SPs)
+# dim(AAsp)
+# AAsp2 <- left_join(AA2, AAsp, by=c("tId"= "name"))
+# dim(AAsp2)
+# head(AAsp2)
+# names(AAsp2) <- c("tId", "gId", "seq", "Cmax", "pos", "Ymax", "pos.1", "Smax", "pos.2", "Smean", "D", "SP", "Dmaxcut", "Networks.used")
+# AAbySP <- AAsp2[AAsp2$SP == "Y",]
+# dim(AAbySP)
+# 
+# 
