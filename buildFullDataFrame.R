@@ -43,6 +43,7 @@ macExpDat <- read.delim(file.path(MEdatdir, "macExpEnsembl.txt"))
 #now check expression
 macExpList <- list(macExpDat[,c(4:13)])
 summary(unlist(macExpList)) #getting quartiles
+head(macExpList[[1]])
 ## I will take these maxes and add them to my dataframe. I am only taking maxes because as long as the protein
 ## is expressed at a minimum of 110 in one sample, it will stay for further analysis. However, this data can be revisited
 ## if we decide that particular tissues are most relevant, or decide to filter based on average, etc.
