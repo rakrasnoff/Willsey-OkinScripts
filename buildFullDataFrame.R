@@ -67,7 +67,7 @@ SPs <- lapply(files, function(x) {
 head(SPs[[1]])
 head(SPs[[2]])
 
-#Rename, reformate
+#Rename, reformat
 for (i in 2:31){
   names(SPs[[i]]) <- names(SPs[[1]])
   SPs[[i]] <- SPs[[i]][,c(1:12)]
@@ -79,12 +79,19 @@ dim(SPdf)
 SPdf <- SPdf[,c(1,10)]
 head(SPdf)
 mmAA <- left_join(mmAA, SPdf, by=c("tId"= "name"))
+mmAA$maxRper15 <- do.call(rbind, mmAA$maxRper15)
 dim(mmAA)
 head(mmAA)
-names(mmAA) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "macExp", "SigPep")
+names(mmAA) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp", "SigPep")
 
 ###################################### ALPHA HELIXES ############################################
 #################################################################################################
+
+
+#################################################################################################
+#################################################################################################
+#Save dataframe
+write.table(mmAA, file.path(outdir, "fullAADataFrame.txt"), sep = "\t", quote=F)
 
 
 
