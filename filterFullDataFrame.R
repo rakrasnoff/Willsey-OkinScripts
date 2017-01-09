@@ -9,27 +9,40 @@ head(mmAA)
 
 mmAA$maxRper15 <- as.list(mmAA$maxRper15)
 head(mmAA)
-mmAA2 <- filter(mmAA, maxRper15 > 0)
-mmAA2$length <- as.numeric(mmAA2$length)
-dim(mmAA2)
-head(mmAA2)
-mmAA2$keep <- 0
-mmAA2$keep[mmAA2$length < 15] <- 1
-mmAA2$keep[mmAA2$length >= 15 & mmAA2$maxRper15 >= 4] <- 1
-mmAA3 <- filter(mmAA2, keep == 1)
-dim(mmAA3)
-head(mmAA3)
+mmAAR <- filter(mmAA, maxRper15 > 0)
+mmAAR$length <- as.numeric(mmAAR$length)
+dim(mmAAR)
+head(mmAAR)
+mmAAR$keep <- 0
+mmAAR$keep[mmAAR$length < 15] <- 1
+mmAAR$keep[mmAAR$length >= 15 & mmAAR$maxRper15 >= 4] <- 1
+mmAAR <- filter(mmAAR, keep == 1)
+dim(mmAAR)
+head(mmAAR)
 
 #Filter by Mac Exp
-mmAA4 <- mmAA
-mmAA4$keep <- 0
-mmAA4$keep[is.na(mmAA$macExp)] <- 1
-mmAA4$keep[!is.na(mmAA$macExp) & mmAA$macExp >= 122.5] <- 1
-sum(mmAA4$keep)
+#mmAAME <- mmAA #to filter original list
+mmAAME <- mmAAR # to continue filtering previously filtered list
+mmAAME$keep <- 0
+mmAAME$keep[is.na(mmAAME$macExp)] <- 1
+mmAAME$keep[!is.na(mmAAME$macExp) & mmAAME$macExp >= 122.5] <- 1
+sum(mmAAME$keep)
+#20684 (keeping those with NAs)
 
+#Filter by Signal Peptides
+mmAASP <- mmAAME
+mmAASP <- filter(mmAASP, SigPep == "Y")
+dim(mmAASP)
+#2938
+
+mmAASP$maxRper15 <- do.call(rbind, mmAASP$maxRper15)
+write.table(mmAASP, file.path(datdir, "filteredListPossibleCPPs.txt"), sep = "\t", quote = F)
 
 # ###check enrichment
-# sum(mouseCPPs$mouseEnsembl %in% checkMacExp$gId)
+mouseCPPs <- read.delim(file.path(datdir, "mouseCPPs.txt"))
+head(mouseCPPs)
+sum(mouseCPPs$mouseEnsembl %in% mmAASP$gId)/nrow(mmAASP)
+sum(mouseCPPs$mouseEnsembl %in% mmAA$gId)/nrow(mmAA)
 # /nrow(macExpEns)
 # sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
 # filtMacExp[filtMacExp$gId %in% mouseCPPs$mouseEnsembl,]
