@@ -46,3 +46,8 @@ sum(mouseCPPs$mouseEnsembl %in% mmAA$gId)/nrow(mmAA)
 # /nrow(macExpEns)
 # sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
 # filtMacExp[filtMacExp$gId %in% mouseCPPs$mouseEnsembl,]
+
+#Write to file for 2ry structure prediction
+
+
+
