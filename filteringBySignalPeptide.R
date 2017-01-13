@@ -20,6 +20,7 @@ AA4Fasta <- AA4Fasta[!(6000 < str_count(AA4Fasta$seq)),]
 dim(AA4Fasta)
 
 ##
+#seqRFLP
 fast1 <- dataframe2fas(AA4Fasta[c(1:2000),], file = "~/Dropbox/WillseyLab/CPPs/AAs1.fa")
 fast2 <- dataframe2fas(AA4Fasta[c(2001:4000),], file = "~/Dropbox/WillseyLab/CPPs/AAs2.fa")
 fast3 <- dataframe2fas(AA4Fasta[c(4001:6000),], file = "~/Dropbox/WillseyLab/CPPs/AAs3.fa")
