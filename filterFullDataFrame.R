@@ -54,11 +54,11 @@ sum(mouseCPPs$mouseEnsembl %in% mmAA$gId)/nrow(mmAA)
 mmAA <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
 fastaDF <- mmAA[,c(1,3)]
 fastaDF$seq <- gsub("[*].*$","",fastaDF$seq)
-fast1 <- dataframe2fas(fastaDF[c(1:100),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
-fast2 <- dataframe2fas(fastaDF[c(501:1000),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs2.fa")
-fast3 <- dataframe2fas(fastaDF[c(1001:1500),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs3.fa")
-fast4 <- dataframe2fas(fastaDF[c(1501:2000),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs4.fa")
-fast5 <- dataframe2fas(fastaDF[c(2001:2500),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs5.fa")
-fast6 <- dataframe2fas(fastaDF[c(2501:2938),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs6.fa")
+fast1 <- dataframe2fas(fastaDF[c(1:2938),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
+#fast2 <- dataframe2fas(fastaDF[c(501:1000),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs2.fa")
+#fast3 <- dataframe2fas(fastaDF[c(1001:1500),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs3.fa")
+#fast4 <- dataframe2fas(fastaDF[c(1501:2000),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs4.fa")
+#fast5 <- dataframe2fas(fastaDF[c(2001:2500),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs5.fa")
+#fast6 <- dataframe2fas(fastaDF[c(2501:2938),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs6.fa")
 
 
