@@ -4,6 +4,7 @@ library(stringr)
 library(dplyr)
 library(plyr)
 library(zoo)
+library(seqRFLP)
 library(org.Mm.eg.db)
 
 ##Create dataframe with all information necessary for filtering
@@ -18,6 +19,7 @@ MEdatdir <- "~/Dropbox/WillseyLab/CPPs/MacExpDat" #macrophage expression data
 outdir <- "~/Dropbox/WillseyLab/CPPs"
 
 #Adding R content 
+mmAA$seq <- gsub("[*]", "", mmAA$seq) #added this for second run; will fix issues with length and astrixes
 mmAA <- mutate(mmAA, length = str_count(mmAA$seq)) #this creates a column with peptide length
 mmAA <- mutate(mmAA, Rc = str_count(mmAA$seq, "R")) #number of Rs in the entire peptide
 mmAA <- mutate(mmAA, Rp = Rc/length * 100) #percentage of Rs in the peptide
@@ -32,6 +34,7 @@ countRs <- function(mmAA) {
 mmAA$maxRper15 <- 0
 mmAA$maxRper15[mmAA$length < 15] <- mmAA$Rc[mmAA$length < 15]
 mmAA$maxRper15[mmAA$length >= 15] <- lapply(lapply(mmAA$seq[mmAA$length >= 15], countRs), max)
+mmAA1 <- mmAA
 #################################################################################################
 #################################################################################################
 
@@ -80,19 +83,57 @@ dim(SPdf)
 SPdf <- SPdf[,c(1,10)]
 head(SPdf)
 mmAA <- left_join(mmAA, SPdf, by=c("tId"= "name"))
-mmAA$maxRper15 <- do.call(rbind, mmAA$maxRper15)
+
 dim(mmAA)
 head(mmAA)
 names(mmAA) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp", "SigPep")
 
 ###################################### ALPHA HELIXES ############################################
 #################################################################################################
+#Write to file for running through prediction server
+AAFasta <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
+fastaDF <- AAFasta[,c(1,3)]
+#fastaDF$seq <- gsub("[*]","",fastaDF$seq) #now fixed up above
+fast1 <- dataframe2fas(fastaDF, file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
 
 
+#for rerunning where stars messed stuff up
+test <- data.frame(mmAASS$tId, mmAASS$seq, mmAASS$length, mmAASS$Prediction)
+names(test) <- c("tId", "seq", "length", "Prediction")
+#test$seq <- gsub("$[*]", "", test$seq)
+test$predLength <- data.frame(str_count(test[,4]))
+test <- mutate(test, lengthLessOne = length - 1)
+test$eq <- array(0, 2938)
+head(test)
+test$eq[is.na(test$predLength)] <- 0
+test$eq[test$length == test$predLength] <- 0
+test$eq[test$length != test$predLength] <- 1
+test$eq[test$lengthLessOne == test$predLength] <- 0
+test2 <- test[test$eq == 1,]
+test2$seq <- gsub("[*]", "", test2$seq)
+test2Fas <- test2[,c(1,2)]
+fasta2 <- dataframe2fas(test2Fas, file="~/Dropbox/WillseyLab/CPPs/filteredFAs/AAsrerun.fa")
+
+
+#read in secondary structure results
+struct2ry <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_2-1-17.txt")
+head(struct2ry)
+class(struct2ry$Prediction)
+struct2ry$Prediction <- gsub(",","", struct2ry$Prediction)
+struct2ry$Confidence <- gsub(",","", struct2ry$Confidence)
+head(struct2ry)
+
+
+#combine with mmAA dataframe
+mmAA <- left_join(mmAA, struct2ry, by = c("tId"="fName"))
 #################################################################################################
 #################################################################################################
 #Save dataframe
-write.table(mmAA, file.path(outdir, "fullAADataFrame.txt"), sep = "\t", quote=F)
+mmAAtoSave <- mmAA
+mmAAtoSave$maxRper15 <- do.call(rbind, mmAAtoSave$maxRper15)
+mmAAtoSave$maxRper15 <- data.frame(mmAAtoSave$maxRper15)
+
+write.table(mmAAtoSave, file.path(outdir, "finalAADataframe.txt"), sep = "\t", quote=F)
 
 
 

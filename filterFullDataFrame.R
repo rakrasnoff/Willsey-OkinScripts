@@ -4,7 +4,7 @@ library(seqRFLP)
 datdir <- "~/Dropbox/WillseyLab/CPPs"
 outdir <- "~/Dropbox/WillseyLab/CPPs/output"
 
-mmAA <- read.delim(file.path(datdir, "fullAADataFrame.txt"))
+mmAA <- read.delim(file.path(datdir, "finalAADataframe.txt"))
 head(mmAA)
 
 #Filter by R content (sliding window)
@@ -37,9 +37,57 @@ mmAASP <- filter(mmAASP, SigPep == "Y")
 dim(mmAASP)
 #2938
 
-mmAASP$maxRper15 <- do.call(rbind, mmAASP$maxRper15)
-write.table(mmAASP, file.path(datdir, "filteredListPossibleCPPs.txt"), sep = "\t", quote = F)
+
+
+#Filter by Secondary Structure
+head(mmAASP)
+mmAASS <- mmAASP
+mmAASS$helix <- 0
+mmAASS <- mutate(mmAASS, helix = str_count(mmAASS$Prediction, "H"))
+head(mmAASS)
+
+argHelix <- function(peptide) {
+  pred <- strsplit(mmAASS$Prediction[mmAASS$tId == peptide], "")
+  conf <- strsplit(mmAASS$Confidence[mmAASS$tId == peptide], "")
+  seq <- strsplit(mmAASS$seq[mmAASS$tId == peptide], "")
+  argHelixDF <- data.frame(pred, conf, seq)
+  names(argHelixDF) <- c("pred", "conf", "seq")
+  argHelixDF
+}
+
+
+argHelixTest <- function(peptide) {
+  struct <- peptide$pred[peptide$seq == "R"]
+  argPerHelix <- sum(str_count(struct, "H"))
+}
+
+#for rerunning 
+test <- data.frame(mmAASS$tId, mmAASS$seq, mmAASS$length, mmAASS$Prediction)
+names(test) <- c("tId", "seq", "length", "Prediction")
+#test$seq <- gsub("$[*]", "", test$seq)
+test$predLength <- data.frame(str_count(test[,4]))
+test <- mutate(test, lengthLessOne = length - 1)
+test$eq <- array(0, 2938)
+head(test)
+test$eq[is.na(test$predLength)] <- 0
+test$eq[test$length == test$predLength] <- 0
+test$eq[test$length != test$predLength] <- 1
+test$eq[test$lengthLessOne == test$predLength] <- 0
+
+test2 <- test[test$eq == 1,]
+test2$seq <- gsub("[*]", "", test2$seq)
+test2Fas <- test2[,c(1,2)]
+fasta2 <- dataframe2fas(test2Fas, )
+
+
+
+
+#write table to file
+mmAASS$maxRper15 <- do.call(rbind, mmAASP$maxRper15)
+write.table(mmAASS, file.path(datdir, "filteredListPossibleCPPs.txt"), sep = "\t", quote = F)
 mmAA <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
+
+
 
 # ###check enrichment
 mouseCPPs <- read.delim(file.path(datdir, "mouseCPPs.txt"))
@@ -50,15 +98,5 @@ sum(mouseCPPs$mouseEnsembl %in% mmAA$gId)/nrow(mmAA)
 # sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
 # filtMacExp[filtMacExp$gId %in% mouseCPPs$mouseEnsembl,]
 
-#Write to file for 2ry structure prediction
-mmAA <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
-fastaDF <- mmAA[,c(1,3)]
-fastaDF$seq <- gsub("[*].*$","",fastaDF$seq)
-fast1 <- dataframe2fas(fastaDF[c(1:2938),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
-#fast2 <- dataframe2fas(fastaDF[c(501:1000),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs2.fa")
-#fast3 <- dataframe2fas(fastaDF[c(1001:1500),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs3.fa")
-#fast4 <- dataframe2fas(fastaDF[c(1501:2000),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs4.fa")
-#fast5 <- dataframe2fas(fastaDF[c(2001:2500),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs5.fa")
-#fast6 <- dataframe2fas(fastaDF[c(2501:2938),], file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs6.fa")
 
 

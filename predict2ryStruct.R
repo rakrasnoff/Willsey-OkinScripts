@@ -91,6 +91,38 @@ fast30 <- dataframe2fas(AA4Fasta[c(58001:60000),], file = "~/Dropbox/WillseyLab/
 fast31 <- dataframe2fas(AA4Fasta[c(60001:61418),], file = "~/Dropbox/WillseyLab/CPPs/AAs31.fa")
 ##
 
+################
+### Set directories
+library(biostrings)
+datdir <- "~/Dropbox/WillseyLab/CPPs"
+outdir <- "~/Dropbox/WillseyLab/CPPs/fastas"
+require(Biostrings)
+options(stringsAsFactors = FALSE)
+library(stringr)
+library(dplyr)
+library(plyr)
+library(zoo)
+library(org.Mm.eg.db)
+library(seqRFLP)
+
+### Load data
+AA2 <- read.delim(file.path(datdir, "MmAAtable.txt"))
+head(AA2)
+
+###Writing Fasta with transcript ids
+AA4Fasta <- AA2[,c(1,3)]
+AA4Fasta$seq <- gsub("[*].*$","",AA4Fasta$seq)
+head(AA4Fasta)
+AA4Fasta <- AA4Fasta[!duplicated(AA4Fasta[,1]),]
+#long <- 9000 < str_count(AA4Fasta$seq)
+#sum(long)
+dim(AA4Fasta)
+#AA4Fasta <- AA4Fasta[!(6000 < str_count(AA4Fasta$seq)),] 
+dim(AA4Fasta)
+
+##
+#seqRFLP
+fast <- dataframe2fas(AA4Fasta, file = "~/Dropbox/WillseyLab/CPPs/AAs.fa")
 
 
 
