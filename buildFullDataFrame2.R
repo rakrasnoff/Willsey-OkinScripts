@@ -20,6 +20,7 @@ outdir <- "~/Dropbox/WillseyLab/CPPs"
 
 #Adding R content 
 mmAA$seq <- gsub("[*]", "", mmAA$seq) #added this for second run; will fix issues with length and astrixes
+"[*]" %in% mmAA$seq
 mmAA <- mutate(mmAA, length = str_count(mmAA$seq)) #this creates a column with peptide length
 mmAA <- mutate(mmAA, Rc = str_count(mmAA$seq, "R")) #number of Rs in the entire peptide
 mmAA <- mutate(mmAA, Rp = Rc/length * 100) #percentage of Rs in the peptide
@@ -35,9 +36,35 @@ mmAA$maxRper15 <- 0
 mmAA$maxRper15[mmAA$length < 15] <- mmAA$Rc[mmAA$length < 15]
 mmAA$maxRper15[mmAA$length >= 15] <- lapply(lapply(mmAA$seq[mmAA$length >= 15], countRs), max)
 
+#filter to remove unnecessary rows, make df smaller
+mmAAR <- mmAA[mmAA$maxRper15 > 0, ]
+mmAAR$keep <- 0
+mmAAR$keep[mmAAR$length < 15] <- 1
+mmAAR$keep[mmAAR$length >= 15 & mmAAR$maxRper15 >= 4] <- 1
+mmAAR <- subset(mmAAR, keep == 1)
+dim(mmAAR)
 
-#RrichWindows <- RrichWindows[lapply(RrichWindows, max) >= 4]
+mmAAlong <- mmAAR[mmAAR$length >= 15,]
+Rwindows <- lapply(1:29629, function(x) countRswithNames(mmAAlong[x,]))
+RwindowsList <- Rwindows
+Rwindows <- lapply(Rwindows, function(x) mutate(x, pos.num=seq(1:nrow(x))))
+Rwindows <- lapply(Rwindows, subset, R>=4)
+#stopped here; need to add pos.num thing to short ones before combining
+Rwindows <- do.call(rbind, Rwindows)
 
+
+#make dataframe with only tIds aand seqs, so I can add sequences here
+seqs <- data.frame(tId=mmAAlong$tId, seq=mmAAlong$seq)
+names(Rwindows) <- c("R", "tId")
+
+Rdflong <- left_join(Rwindows, seqs)
+
+
+dfshort <- mmAA[mmAA$length < 15,]
+dfshort <- filter(dfshort, Rc > 0)
+Rdfshort <- data.frame(R=dfshort$Rc, tId=dfshort$tId, seq=dfshort$seq)
+Rdfshort$pos.num = 1 #need to make sure columns are in the correct order
+dftest <- rbind(Rdfshort, Rdflong)
 
 
 
@@ -102,10 +129,10 @@ names(mmAA) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp
 ###################################### ALPHA HELIXES ############################################
 #################################################################################################
 #Write to file for running through prediction server
-#AAFasta <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
-#fastaDF <- AAFasta[,c(1,3)]
+AAFasta <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
+fastaDF <- AAFasta[,c(1,3)]
 #fastaDF$seq <- gsub("[*]","",fastaDF$seq) #now fixed up above
-#fast1 <- dataframe2fas(fastaDF, file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
+fast1 <- dataframe2fas(fastaDF, file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
 
 
 #for rerunning where stars messed stuff up
@@ -155,5 +182,6 @@ mmAAtoSave$maxRper15 <- data.frame(mmAAtoSave$maxRper15)
 names(mmAAtoSave) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp", "sigPep", "Prediction", "Confidence")
 #write.table(mmAAtoSave, file.path(outdir, "finalAADataframe.txt"), sep = "\t", quote=F, row.name=F)
 save(mmAAtoSave, file=file.path(outdir, "mmAAFinal.RData"))
+
 
 
