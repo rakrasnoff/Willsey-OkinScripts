@@ -29,47 +29,11 @@ dim(mmAA) #61440 by 3
 ####################################################################################################
 ### Remove any sequence that occurs after a stop
 ####################################################################################################
-#
 
 mmAA <- mutate(mmAA, length = str_count(seq)) #this creates a column with peptide length
 mmAA <- separate(mmAA, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
 head(mmAA)
 tail(mmAA)
-
-
-
-#This function creates a dataframe with each piece of AA sequence, separated by stop codons
-stopSplit <- function(seq, tId) {
-  splits <- data.frame(seq=strsplit(seq, "[*]"))
-  splits$tId <- tId
-  names(splits) <- c("seq", "tId")
-  splits[1,]
-}
-
-mmAAstop <- mapply(stopSplit, mmAA$seq, mmAA$tId, SIMPLIFY=FALSE)
-names(mmAAstop) <- mmAA$tId
-mmAAstopdf <- rbind.fill(mmAAstop)
-dim(mmAAstopdf) #60343 rows
-
-#This segment is for looking at starts - don't worry about it now#
-#Now, filter by Met presence; must have at least 1 met to keep
-#mmAAstopdf <- mutate(mmAAstopdf, Mc = str_count(mmAAstopdf$seq, "M"))
-#mmAAstopdf <- filter(mmAAstopdf, Mc >= 1)
-#dim(mmAAstopdf) #This gets rid of a few hundred, bringing me to 59104
-#Now, need to cut from first M in sequence to last AA of sequence
-#pos = regexpr('pattern', x) # Returns position of 1st match in a string
-#mmAAstopdf <- mutate(mmAAstopdf, Mpos = regexpr("M", seq))
-#sum(mmAAstopdf$Mpos > 1) #M does not start the sequence for 5535 sequences
-#mmAAstopdf <- mutate(mmAAstopdf, length = str_count(seq)) #this gives me the last position, to make it easy to cut
-#mmAAstopdf <- mutate(mmAAstopdf, Mseq = substring(seq, Mpos, length))
-#Internal check: the length should differ for 5535 sequences
-#mmAAstopdf <- mutate(mmAAstopdf, length2 = str_count(Mseq))
-#sum(mmAAstopdf$length != mmAAstopdf$length2) #Equals 5535, seems to have worked properly
-#mmAAstopdf <- mutate(mmAAstopdf, Mpos2 = regexpr("M", Mseq)) #make sure it cut correctly
-#sum(mmAAstopdf$Mpos2 > 1) #gives 0 - definitely cut correctly
-
-#I will now filter by SRP in 2 ways
-#head(mmAAstopdf)
 
 ####################################################################################################
 ###3. Filter by presence of SRP
@@ -95,69 +59,30 @@ SPdf <- rbind.fill(SPs)
 dim(SPdf)
 SPdf <- SPdf[,c(1,10)]
 head(SPdf)
-mmAAstopdf <- left_join(mmAAstopdf, SPdf, by=c("tId"= "name"))
-dim(mmAAstopdf) 
-head(mmAAstopdf)
-names(mmAAstopdf) <- c("seq", "tId", "Mc", "Mpos", "length", "Mseq", "length2", "Mpos2", "sigPep")
+mmAASP <- left_join(mmAA, SPdf, by=c("tId"= "name"))
+dim(mmAASP) 
+head(mmAASP)
+names(mmAASP) <- c("tId", "gId", "seq", "subseq", "length", "sigPep")
 
-mmSP <- filter(mmAAstopdf, sigPep != "N")
-dim(mmSP) #gives me 7642
-#Now, each of these 7642 sequences needs to be run through the prediction server
-#mmAA <- mmSP
-
-#Filtering by SRP round 2
-mmAA4Fasta <- data.frame(tId = make.unique(mmSP$tId, sep="_"), Mseq = mmSP$Mseq) #using make unique here, because otherwise server only runs once
-#fast1 <- dataframe2fas(mmAA4Fasta[c(1:2000),], file = "~/Dropbox/WillseyLab/CPPs/SRPpred2/input/AAs1.fa")
-#fast2 <- dataframe2fas(mmAA4Fasta[c(2001:4000),], file = "~/Dropbox/WillseyLab/CPPs/SRPpred2/input/AAs2.fa")
-#fast3 <- dataframe2fas(mmAA4Fasta[c(4001:6000),], file = "~/Dropbox/WillseyLab/CPPs/SRPpred2/input/AAs3.fa")
-#fast4 <- dataframe2fas(mmAA4Fasta[c(6001:7642),], file = "~/Dropbox/WillseyLab/CPPs/SRPpred2/input/AAs4.fa")
-
-SPdatdir2 <- "~/Dropbox/WillseyLab/CPPs/SRPpred2/predictions"
-files <- dir(SPdatdir2)
-
-#Read in files
-SPs <- lapply(files, function(x) { 
-  SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/SRPpred2/predictions", x))
-})
-head(SPs[[1]])
-head(SPs[[2]])
-
-#Rename, reformat
-for (i in 2:4){
-  names(SPs[[i]]) <- names(SPs[[1]])
-  SPs[[i]] <- SPs[[i]][,c(1:12)]
-}
-summary(SPs)
-
-SPdf <- rbind.fill(SPs)
-dim(SPdf) #correct number of rows
-SPdf <- SPdf[,c(1,10)]
-head(SPdf)
-
-sum(duplicated(SPdf$name))
-
-mmSP <- left_join(mmSP, SPdf, by=c("tId"= "name"))
-dim(mmSP) 
-head(mmSP)
-sum(duplicated(mmSP$tId))
-names(mmSP) <- c("seq", "tId", "Mc", "Mpos", "length", "Mseq", "length2", "Mpos2", "sigPep", "sigPep2")
-
-#dummy <- filter(mmSP, sigPep2 !="Y")
-mmSP <- filter(mmSP, sigPep2 != "N")
-
-dim(mmSP) #gives me 7540 (doesn't change by much)
+#Now, filtering
+mmSP <- filter(mmAASP, sigPep != "N")
+dim(mmSP) #gives me 7771, none are duplicated
+#Now, each of these 7771 sequences needs to be run through the prediction server
 mmAA <- mmSP
+
+#Filtering by SRP round 2- I ran all of the subsequences, and none of the y/n predictions changed
 
 ####################################################################################################
 ###4. Filter by R and K presence
 ####################################################################################################
 #mmAA <- mutate(mmAA, Mlength = str_count(mmAA$Mseq)) #this creates a column with peptide length
-mmAA <- mutate(mmAA, Rc = str_count(mmAA$Mseq, "R")) #number of Rs in the entire peptide
-mmAA <- mutate(mmAA, Kc = str_count(mmAA$Mseq, "K"))
+mmAA <- mutate(mmAA, sublength = str_count(subseq))
+mmAA <- mutate(mmAA, Rc = str_count(mmAA$subseq, "R")) #number of Rs in the entire peptide
+mmAA <- mutate(mmAA, Kc = str_count(mmAA$subseq, "K"))
 mmAA <- mutate(mmAA, Rp = Rc/length * 100) #percentage of Rs in the peptide
 mmAA <- mutate(mmAA, Kp = Kc/length *100)
 head(mmAA)
-dim(mmAA)
+dim(mmAA) #7771 x 11
 
 #This function will count the number of Args and Lys in a window of defined size. To make it simpler to use in an apply function, 
 #to change the size of the window, just alter it in the function below (rather than setting as a variable).
@@ -181,27 +106,28 @@ countRKs <- function(seq, name) {
   seqtable
 }
 
-mmAAlong <- mmAA[mmAA$length2 >= 100,] #6916 rows
-RKwindow <- mapply(countRKs, mmAAlong$Mseq, mmAAlong$tId, SIMPLIFY=FALSE)
+mmAAlong <- mmAA[mmAA$sublength >= 100,] #6916 rows
+RKwindow <- mapply(countRKs, mmAAlong$subseq, mmAAlong$tId, SIMPLIFY=FALSE)
 #save(RKwindow, file=file.path(outdir, "RKwindowOutput.RData"))
 #load(file.path(outdir, "RKwindowOutput.RData"))
 names(RKwindow) <- mmAAlong$tId
-sum(duplicated(mmAAlong$tId))
-mmAAlong$tId[duplicated(mmAAlong$tId)]
-maxes <- lapply(1:6916, function(x) max(RKwindow[[x]]$maxRK))
+sum(duplicated(mmAAlong$tId)) #none
+maxes <- lapply(1:7002, function(x) max(RKwindow[[x]]$maxRK))
 RKwindow2 <- RKwindow[maxes>=4]
-length(names(RKwindow2)) #trims to 6228
-length(names(RKwindow)) #from 6916
+length(names(RKwindow2)) #trims to 6295
+length(names(RKwindow)) #from 7002
 RKwindow2 <- lapply(RKwindow2, function(x) subset(x, maxRK >= 4))
 RKwindow2 <- lapply(RKwindow2, function(x) mutate(x, maxRK = unlist(as.list(maxRK))))
 
 #row.names(RKwindow2) <- names(RKwindow2)
 RKdf <- rbind.fill(RKwindow2)
-dim(RKdf) #1668297       4
+head(RKdf)
+names(RKdf) <- c("seq100", "pos", "tId", "maxRK")
+dim(RKdf) #1675892       4
 
 min(RKdf$maxRK) #checking that filter worked; it did
 sum(duplicated(RKdf$tId))
-sum(!duplicated(RKdf$tId)) #6224 #why isn't this exactly 6228, or more different?
+sum(!duplicated(RKdf$tId)) #6295
 
 ####################################################################################################
 ###5. Add alpha helix content
@@ -229,41 +155,11 @@ CPPdf <- left_join(RKdf, struct2ryAll, by = c("tId"="fName"))
 CPPdf <- left_join(CPPdf, mmAAlong, by=c("tId"="tId"))
 dim(CPPdf) #1669988      19
 head(CPPdf)
+CPP <- data.frame(tId=CPPdf$tId, gId=CPPdf$gId, fullseq=CPPdf$seq, fulllength=CPPdf$length, subseq=CPPdf$subseq, sublength=CPPdf$sublength, 
+                  sigPep=CPPdf$sigPep, Rc=CPPdf$Rc, Kc=CPPdf$Kc, seq100=CPPdf$seq100, 
+                  pos=CPPdf$pos, maxRK=CPPdf$maxRK, Prediction=CPPdf$Prediction, Confidence=CPPdf$Confidence)
 
-head(CPPdf, 100)
-#However, I have NAs for many sequences, because we are filtering differently than before. I need to get a list of IDs that I need predictions for. Even better, list of Ids with subsequences, and my rownames
-emptySeq <- CPPdf[is.na(CPPdf$Prediction)==T,]
-dim(emptySeq) #it's over a million sequences...
-length(unique(emptySeq$tId)) #but only 4423 peptides #now down to 4371 peptides, which is good news - I did cut out a few by splitting things up 
-#Even though it's not enough to make a difference, it is reassuring that the effect was in the same direction as predicted
-head(emptySeq)
-#I need the original peptide lengths - will need to cut and merge with mmAAlong
-max(emptySeq$length)
-#Need to write these sequences to fasta
-empty4Fasta <- data.frame(tId=emptySeq$tId, seqAll=emptySeq$seqAll)
-empty4Fasta <- empty4Fasta[!duplicated(empty4Fasta$tId), ]
-dim(empty4Fasta) #4371 long, the correct length
-#fast1 <- dataframe2fas(empty4Fasta, file = "~/Dropbox/WillseyLab/CPPs/RKEnrichedPeptides.fa") commented out so I don't overwrite my original list (for comparison purposes)...
-fast2 <- dataframe2fas(empty4Fasta, file = "~/Dropbox/WillseyLab/CPPs/RKEnrichedPeptides2.fa")
-#Are all 4371 within the 4423 I previously identified?Need to figure out how many Ids overlap, but also how many times sequence length for Ids overlap
-
-testFast <- readAAStringSet("~/Dropbox/WillseyLab/CPPs/RKEnrichedPeptides.fa") 
-namesTestFast <- paste(names(testFast))
-length(namesTestFast)
-namesTF <- as.data.frame(namesTestFast)
-class(namesTF[,1])
-head(namesTF)
-tIdTF <- do.call("rbind", strsplit(namesTF[,1], "[. :]"))[,1]
-#gIdTF <- do.call("rbind", strsplit(namesTF[,1], "[. :]"))[,11]
-length(tIdTF)
-seqTF = as.data.frame(paste(testFast))
-dim(seqTF)
-TF2 <- data.frame(tIdTF, seqTF)
-names(TF2) <- c("tId", "seq")
-head(TF2)
-
-sum(unique(emptySeq$tId) %in% TF2$tId) #they are all there (all 4371 of them, so that's good)
-
+head(CPP, 100)
 ####################################################################################################
 ###6. Filter by alpha helixes
 ####################################################################################################
