@@ -73,7 +73,7 @@ mmAA <- mmSP
 #Filtering by SRP round 2- I ran all of the subsequences, and none of the y/n predictions changed
 
 ####################################################################################################
-###4. Filter by R and K presence
+###4. Filter by R and K presence  FROM HERE DOWN, ONLY HAVE INFO ON LONG TRANSCRIPTS (>100)
 ####################################################################################################
 #mmAA <- mutate(mmAA, Mlength = str_count(mmAA$Mseq)) #this creates a column with peptide length
 mmAA <- mutate(mmAA, sublength = str_count(subseq))
@@ -108,9 +108,11 @@ countRKs <- function(seq, name) {
 
 mmAAlong <- mmAA[mmAA$sublength >= 100,] #6916 rows
 RKwindow <- mapply(countRKs, mmAAlong$subseq, mmAAlong$tId, SIMPLIFY=FALSE)
+#RKtest <- mapply(countRKs, mmAAlong$subseq[1:3], mmAAlong$tId[1:3], SIMPLIFY=FALSE)
 #save(RKwindow, file=file.path(outdir, "RKwindowOutput.RData"))
 #load(file.path(outdir, "RKwindowOutput.RData"))
 names(RKwindow) <- mmAAlong$tId
+names(RKtest) <- mmAAlong$tId[1:3]
 sum(duplicated(mmAAlong$tId)) #none
 maxes <- lapply(1:7002, function(x) max(RKwindow[[x]]$maxRK))
 RKwindow2 <- RKwindow[maxes>=4]
@@ -118,9 +120,11 @@ length(names(RKwindow2)) #trims to 6295
 length(names(RKwindow)) #from 7002
 RKwindow2 <- lapply(RKwindow2, function(x) subset(x, maxRK >= 4))
 RKwindow2 <- lapply(RKwindow2, function(x) mutate(x, maxRK = unlist(as.list(maxRK))))
+#RKtest <- lapply(RKtest, function(x) mutate(x, maxRK=unlist(as.list(maxRK))))
 
 #row.names(RKwindow2) <- names(RKwindow2)
 RKdf <- rbind.fill(RKwindow2)
+#dftest <- rbind.fill(RKtest)
 head(RKdf)
 names(RKdf) <- c("seq100", "pos", "tId", "maxRK")
 dim(RKdf) #1675892       4
@@ -165,9 +169,14 @@ head(CPP, 100)
 ####################################################################################################
 
 head(CPPdf)
-CPPdf.C <- CPPdf[is.na(CPPdf$Prediction)==F,]
-dim(CPPdf)
-dim(CPPdf.C)
+CPP.C <- CPP[is.na(CPP$Prediction)==F,]
+dim(CPP)
+dim(CPP.C)
+
+#First, trim predictions to correct windows of 100
+class(CPP.C$pos) <- "numeric"
+CPP.C <- mutate(CPP.C, pred100=(substring(Prediction, pos, pos+99)))
+head(CPP.C)
 
 
 hexSplit <- function(Prediction) {
@@ -197,7 +206,8 @@ hexSplit <- function(Prediction) {
 }
 
 #trialList <- lapply(1:nrow(CPPdf.C), function(x) hexSplit(CPPdf.C$Prediction[x]))
-trialList <- lapply(CPPdf.C$Prediction, hexSplit)
+trialList <- lapply(CPP.C$pred100, hexSplit)
+#needs updates after this point
 names(trialList) <- mmAAshort$tId[1:nrow(mmAAshort)]
 trialdf <- do.call(rbind, trialList)
 trialdf$tId <- do.call(rbind, strsplit(rownames(trialdf), "[.]"))[,1]
