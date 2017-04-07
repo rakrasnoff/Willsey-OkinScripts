@@ -201,91 +201,192 @@ write.table(missing, file.path(outdir, "longPepMissing2ndryPred.txt"), sep = "\t
 
 #Now, I will extract all unique sequences:
 CPP.u <- CPP.pred[!(duplicated(CPP.pred$tId)),]
-
-#First, trim predictions to correct windows of 100
-class(CPP.pred$pos) <- "numeric"
-CPP.pred <- mutate(CPP.pred, pred100=(substring(Prediction, pos, pos+99)))
-head(CPP.pred)
-dim(CPP.pred) #[1] 777889     15
+dim(CPP.u) #4881 x 14
+#Get rid of seq100 - here, it is just giving me a random seq100, based on whatever was left over
+CPP.u <- CPP.u[,-c(10,11,12)] #also getting rid of position and maxRK for seq100
+dim(CPP.u) #4881 x 11
 
 
+#Now, I will run hexsplit on CPP.u
 hexSplit <- function(Prediction) {
-  df <- strsplit(Prediction, "")
-  df <- data.frame(df)
-  df$pos <- seq(1:nrow(df))
-  names(df) <- c("hex", "pos")
-  df$hex[df$hex!="H"] <- "-"
-  test <- array(0, nrow(df))
-  test <- data.frame(start=test, end=test)
-  if (df$hex[1] == "H") {
-    test$start[1] = 1
+  pred.df <- strsplit(Prediction, "")
+  pred.df <- data.frame(pred.df)
+  names(pred.df) <- "hex"
+  pred.df <- data.frame(pred.df[(pred.df$hex != ","),])
+  pred.df$pos <- seq(1:nrow(pred.df))
+  names(pred.df) <- c("hex", "pos")
+  pred.df$hex[pred.df$hex!="H"] <- "-"
+  zeros <- array(0, nrow(pred.df))
+  pos.df <- data.frame(start=zeros, end=zeros)
+  if (pred.df$hex[1] == "H") {
+    pos.df$start[1] = 1
   }
-  if(df$hex[nrow(df)] == "H") {
-    test$end[nrow(df)]= nrow(df)
+  if(pred.df$hex[nrow(pred.df)] == "H") {
+    pos.df$end[nrow(pred.df)]= nrow(pred.df)
   }
-  for (i in 1:(nrow(df)-1)) {
-    if (df$hex[i] == "-" & df$hex[i+1] == "H") 
-    {test$start[i] <- df$pos[i+1]}
-    if (df$hex[i] == "H" & df$hex[i+1] == "-")
-    {test$end[i] <- df$pos[i]}
+  for (i in 1:(nrow(pred.df)-1)) {
+    if (pred.df$hex[i] == "-" & pred.df$hex[i+1] == "H") 
+    {pos.df$start[i] <- pred.df$pos[i+1]}
+    if (pred.df$hex[i] == "H" & pred.df$hex[i+1] == "-")
+    {pos.df$end[i] <- pred.df$pos[i]}
   }
-  test <- data.frame(test)
-  testhex<-data.frame(start=test$start[test$start!="0"])
-  testhex$end <- test$end[test$end != "0"]
-  testhex
+  pos.df <- data.frame(pos.df)
+  pos.hex<-data.frame(start=pos.df$start[pos.df$start!="0"])
+  pos.hex$end <- pos.df$end[pos.df$end != "0"]
+  pos.hex
 }
 
-#splitHexes <- lapply(CPP.pred$pred100, hexSplit)
+#splitHexes <- lapply(CPP.u$Prediction, hexSplit)
 #save(splitHexes, file="~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
 load("~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
 
-#needs updates after this point
-names(splitHexes) <- CPP.pred$tId
+names(splitHexes) <- CPP.u$tId
 splitHexesDf <- do.call(rbind, splitHexes)
 save(splitHexesDf, file=file.path(outdir, "splitHexesDf.RData"))
 head(splitHexesDf)
 splitHexesDf$tId <- do.call(rbind, strsplit(rownames(splitHexesDf), "[.]"))[,1]
 head(splitHexesDf)
-dim(splitHexesDf) #4553160       3
+dim(splitHexesDf) #27316      3
 
 #merge info with sequences
-mmAA2merge <- data.frame(tId = mmAAshort$tId, seq = mmAAshort$seq)
-mmAA2cut <- full_join(trialdf, mmAA2merge)
+mmAA2merge <- data.frame(tId = CPP.u$tId, subseq = CPP.u$subseq, sublength=CPP.u$sublength)
+mmAA2cut <- full_join(splitHexesDf, mmAA2merge)
 dim(mmAA2cut)
-dim(trialdf)
-mmAA2cut <- mutate(mmAA2cut, hseq = substring(seq, start, end))
+dim(splitHexesDf)
+mmAA2cut <- filter(mmAA2cut, start != "NA")
+dim(mmAA2cut)
+mmAA2cut <- mutate(mmAA2cut, start50 = start-50)
+mmAA2cut <- mutate(mmAA2cut, end50 = end+50)
+mmAA2cut$cut1[mmAA2cut$start50 <= 0] <- 1
+mmAA2cut$cut1[mmAA2cut$start50 > 0] <- mmAA2cut$start50[mmAA2cut$start50 > 0]
+mmAA2cut$cut2[mmAA2cut$end50 > mmAA2cut$sublength] <- mmAA2cut$sublength[mmAA2cut$end50>mmAA2cut$sublength]
+mmAA2cut$cut2[mmAA2cut$end50 <= mmAA2cut$sublength] <- mmAA2cut$end50[mmAA2cut$end50 <= mmAA2cut$sublength]
+mmAA2cut <- mutate(mmAA2cut, hseqFull = substring(subseq, cut1, cut2)) #contains surrounding areas
+mmAA2cut <- mutate(mmAA2cut, hseq = substring(subseq, start, end)) #Only has sequence that overlaps directly with helix
 head(mmAA2cut)
-mmAA2cut <- mutate(mmAA2cut, Rs = str_count(hseq, "R"))
-mmAA2cut <- mutate(mmAA2cut, length = str_count(hseq))
-mmAA2cut <- mutate(mmAA2cut, percent = (Rs/length)*100)
-mmAA2cut <- filter(mmAA2cut, percent > 0)
-dim(mmAA2cut)
-length(unique(mmAA2cut$tId)) 
+mmAA2cut <- mutate(mmAA2cut, hexKsFull = str_count(hseqFull, "K"))
+mmAA2cut <- mutate(mmAA2cut, hexKs = str_count(hseq, "K"))
+mmAA2cut <- mutate(mmAA2cut, hexRsFull = str_count(hseqFull, "R"))
+mmAA2cut <- mutate(mmAA2cut, hexRs = str_count(hseq, "R"))
 
-countRs <- function(mmAA) {
+mmAA2cut <- mutate(mmAA2cut, hexlengthFull=str_count(hseqFull))
+mmAA2cut <- mutate(mmAA2cut, hexlength = str_count(hseq))
+
+mmAA2cut <- mutate(mmAA2cut, RKpercentFull=((hexRsFull+hexKsFull)/hexlengthFull)*100)
+mmAA2cut <- mutate(mmAA2cut, RKpercent = ((hexRs+hexKs)/hexlength)*100)
+
+CPP.hex <- filter(mmAA2cut, RKpercent > 0)
+dim(mmAA2cut)
+dim(CPP.hex)
+head(CPP.hex)
+
+length(unique(mmAA2cut$tId)) #4662 unique ones
+
+#Not sure what else I want to do to filter, so I'm going to move on to shorter ones now
+
+####################################################################################################
+###7. Filtering short transcripts
+####################################################################################################
+
+mmAAshort <- filter(mmAA, sublength < 100)
+dim(mmAAshort)
+
+countRKshort <- function(mmAA) {
   aastring <- AAString(mmAA)
-  nsR <- letterFrequencyInSlidingView(aastring, 8, "R") }
+  nsR <- letterFrequencyInSlidingView(aastring, 16, "RK") }
 
-mmAA2cut$maxRper8 <- 0
-mmAA2cut$maxRper8[mmAA2cut$length < 8] <- mmAA2cut$Rs[mmAA2cut$length < 8]
-mmAA2cut$maxRper8[mmAA2cut$length >= 8] <- lapply(lapply(mmAA2cut$hseq[mmAA2cut$length >= 8], countRs), max)
-head(mmAA2cut)
+RKwindowsShort <- lapply(mmAAshort$subseq, countRKshort)
+names(RKwindowsShort) <- mmAAshort$tId
+mmAAshort$maxRKper16<- lapply(lapply(mmAAshort$subseq, countRKshort), max)
+mmAAshort <- filter(mmAAshort, maxRKper16 >= 4)
+dim(mmAAshort) #leaves me with 373 
 
-mmAA2cut$keep <- 0
-mmAA2cut$keep[mmAA2cut$length < 8] <- 1
-mmAA2cut$keep[mmAA2cut$length >= 8 & mmAA2cut$maxRper8 >= 2] <- 1
-mmAA2cut <- subset(mmAA2cut, keep == 1)
-dim(mmAA2cut)
-length(unique(mmAA2cut$tId)) #1259
-save(mmAA2cut, file=file.path(outdir, "CPPpredictionsHelixSlidingWindowOf8.RData"))
+CPPshort <- inner_join(mmAAshort, struct2ryAll, by = c("tId"="fName"))
+dim(CPPshort) #105 x 14 : missing 268 of them
 
-tIds <- unique(mmAA2cut$tId) 
-
+######IMPORTANT: THESE PEPTIDES DO NOT HAVE SECONDARY STRUCTURE PREDICTIONS###########
+missingshort <- CPP[!(CPPshort$tId %in% struct2ryAll$fName),]
+sum(!duplicated(missingshort$tId))
+write.table(missingshort, file.path(outdir, "shortPepMissing2ndryPred.txt"), sep = "\t", quote=F)
+###################################################################################
 
 
-####################################################################################################
-###6. Filtering short transcripts
-####################################################################################################
+hexSplit <- function(Prediction) {
+  pred.df <- strsplit(Prediction, "")
+  pred.df <- data.frame(pred.df)
+  names(pred.df) <- "hex"
+  pred.df <- data.frame(pred.df[(pred.df$hex != ","),])
+  pred.df$pos <- seq(1:nrow(pred.df))
+  names(pred.df) <- c("hex", "pos")
+  pred.df$hex[pred.df$hex!="H"] <- "-"
+  zeros <- array(0, nrow(pred.df))
+  pos.df <- data.frame(start=zeros, end=zeros)
+  if (pred.df$hex[1] == "H") {
+    pos.df$start[1] = 1
+  }
+  if(pred.df$hex[nrow(pred.df)] == "H") {
+    pos.df$end[nrow(pred.df)]= nrow(pred.df)
+  }
+  for (i in 1:(nrow(pred.df)-1)) {
+    if (pred.df$hex[i] == "-" & pred.df$hex[i+1] == "H") 
+    {pos.df$start[i] <- pred.df$pos[i+1]}
+    if (pred.df$hex[i] == "H" & pred.df$hex[i+1] == "-")
+    {pos.df$end[i] <- pred.df$pos[i]}
+  }
+  pos.df <- data.frame(pos.df)
+  pos.hex<-data.frame(start=pos.df$start[pos.df$start!="0"])
+  pos.hex$end <- pos.df$end[pos.df$end != "0"]
+  pos.hex
+}
+
+
+splitHexesShort <- lapply(CPPshort$Prediction, hexSplit)
+save(splitHexesShort, file="~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.txt")
+load("~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
+
+names(splitHexesShort) <- CPPshort$tId
+splitHexesDfshort <- do.call(rbind, splitHexesShort)
+splitHexesDfshort$tId <- do.call(rbind, strsplit(rownames(splitHexesDfshort), "[.]"))[,1]
+save(splitHexesDfshort, file=file.path(outdir, "splitHexesDfshort.RData"))
+dim(splitHexesDfshort) #218     3
+
+#merge info with sequences
+CPPshort.pred <- data.frame(tId = CPPshort$tId, subseq = CPPshort$subseq, sublength=CPPshort$sublength)
+CPPshort.pred <- full_join(splitHexesDfshort, CPPshort.pred)
+dim(CPPshort.pred)
+CPPshort.pred <- filter(CPPshort.pred, start != "NA")
+dim(CPPshort.pred)
+CPPshort.pred <- mutate(CPPshort.pred, start50 = start-50)
+CPPshort.pred <- mutate(CPPshort.pred, end50 = end+50)
+CPPshort.pred$cut1[CPPshort.pred$start50 <= 0] <- 1
+CPPshort.pred$cut1[CPPshort.pred$start50 > 0] <- CPPshort.pred$start50[CPPshort.pred$start50 > 0]
+CPPshort.pred$cut2[CPPshort.pred$end50 > CPPshort.pred$sublength] <- CPPshort.pred$sublength[CPPshort.pred$end50>CPPshort.pred$sublength]
+CPPshort.pred$cut2[CPPshort.pred$end50 <= CPPshort.pred$sublength] <- CPPshort.pred$end50[CPPshort.pred$end50 <= CPPshort.pred$sublength]
+CPPshort.pred <- mutate(CPPshort.pred, hseqFull = substring(subseq, cut1, cut2)) #contains surrounding areas
+CPPshort.pred <- mutate(CPPshort.pred, hseq = substring(subseq, start, end)) #Only has sequence that overlaps directly with helix
+head(CPPshort.pred)
+CPPshort.pred <- mutate(CPPshort.pred, hexKsFull = str_count(hseqFull, "K"))
+CPPshort.pred <- mutate(CPPshort.pred, hexKs = str_count(hseq, "K"))
+CPPshort.pred <- mutate(CPPshort.pred, hexRsFull = str_count(hseqFull, "R"))
+CPPshort.pred <- mutate(CPPshort.pred, hexRs = str_count(hseq, "R"))
+
+CPPshort.pred <- mutate(CPPshort.pred, hexlengthFull=str_count(hseqFull))
+CPPshort.pred <- mutate(CPPshort.pred, hexlength = str_count(hseq))
+
+CPPshort.pred <- mutate(CPPshort.pred, RKpercentFull=((hexRsFull+hexKsFull)/hexlengthFull)*100)
+CPPshort.pred <- mutate(CPPshort.pred, RKpercent = ((hexRs+hexKs)/hexlength)*100)
+
+CPPshort.hex <- filter(CPPshort.pred, RKpercent > 0)
+dim(CPPshort.pred)
+dim(CPPshort.hex) #112 remaining
+sum(!duplicated(CPPshort.hex$tId)) #69 unique
+head(CPPshort.hex)
+CPPshort.hex <- filter(CPPshort.pred, RKpercent > 25)
+dim(CPPshort.hex) #35 remaining
+sum(!duplicated(CPPshort.hex$tId)) #30 unique
+
+########################################################################
+#Next: rejoin with longer reads
 
 
 
