@@ -22,6 +22,7 @@ outdir <- "~/Dropbox/WillseyLab/CPPs"
 #Start by loading dataframe with mouse peptides. This list comes from GEO database. List initially 
 #loaded in CPP_load_DNA script
 mmAA <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
+mmAA_original <- mmAA #for use later on
 head(mmAA)
 dim(mmAA) #61440 by 3
 
@@ -69,8 +70,8 @@ mmSP <- filter(mmAASP, sigPep != "N")
 dim(mmSP) #gives me 7771, none are duplicated
 #Now, each of these 7771 sequences needs to be run through the prediction server
 #save(mmSP, file=file.path(outdir, "mmSP.RData"))
-#load(file.path(outdir, "mmSP.RData"))
-mmAA <- mmSP
+load(file.path(outdir, "mmSP.RData"))
+mmAA <- mmSP #7771
 #Filtering by SRP round 2- I ran all of the subsequences, and none of the y/n predictions changed
 
 ####################################################################################################
@@ -287,9 +288,9 @@ length(unique(mmAA2cut$tId)) #4662 unique ones
 ####################################################################################################
 ###7. Filtering short transcripts
 ####################################################################################################
-
+mmAA <- mutate(mmAA, sublength=str_count(subseq))
 mmAAshort <- filter(mmAA, sublength < 100)
-dim(mmAAshort)
+dim(mmAAshort) #769, 7
 
 countRKshort <- function(mmAA) {
   aastring <- AAString(mmAA)
@@ -305,7 +306,7 @@ CPPshort <- inner_join(mmAAshort, struct2ryAll, by = c("tId"="fName"))
 dim(CPPshort) #105 x 14 : missing 268 of them
 
 ######IMPORTANT: THESE PEPTIDES DO NOT HAVE SECONDARY STRUCTURE PREDICTIONS###########
-missingshort <- CPP[!(CPPshort$tId %in% struct2ryAll$fName),]
+missingshort <- mmAAshort[!(mmAAshort$tId %in% struct2ryAll$fName),]
 sum(!duplicated(missingshort$tId))
 write.table(missingshort, file.path(outdir, "shortPepMissing2ndryPred.txt"), sep = "\t", quote=F)
 ###################################################################################
@@ -335,6 +336,7 @@ hexSplit <- function(Prediction) {
   }
   pos.df <- data.frame(pos.df)
   pos.hex<-data.frame(start=pos.df$start[pos.df$start!="0"])
+  
   pos.hex$end <- pos.df$end[pos.df$end != "0"]
   pos.hex
 }
@@ -381,12 +383,131 @@ dim(CPPshort.pred)
 dim(CPPshort.hex) #112 remaining
 sum(!duplicated(CPPshort.hex$tId)) #69 unique
 head(CPPshort.hex)
-CPPshort.hex <- filter(CPPshort.pred, RKpercent > 25)
+#CPPshort.hex <- filter(CPPshort.pred, RKpercent > 25)
 dim(CPPshort.hex) #35 remaining
 sum(!duplicated(CPPshort.hex$tId)) #30 unique
 
+##One possible change is to reduce number of RKs required on helix, just require them in surrounding area, for now, am not filtering based on this, will filter 
+#when all reads are recombined
+
 ########################################################################
 #Next: rejoin with longer reads
+#mmAA2cut
+#CPPshort.hex
+
+#renaming for simplicity
+longPeps <- filter(mmAA2cut, (hexRs+hexKs) > 0)
+longPeps$RKpercent[is.na(longPeps$RKpercent)==T] <- 0 #0/0 giving some NAs - removed and made 0
+longPeps$RKpercentFull[is.na(longPeps$RKpercent)==T] <- 0
+
+shortPeps <- CPPshort.hex
+
+colnames(longPeps)
+colnames(shortPeps)
+
+
+longPeps <- data.frame(tId=longPeps$tId, subseq=longPeps$subseq, sublength=longPeps$sublength, start=longPeps$start, end=longPeps$end,
+                       start50=longPeps$start50, end50=longPeps$end50, cut1=longPeps$cut1, cut2=longPeps$cut2, hexlength=longPeps$hexlength, 
+                       hexlengthFull=longPeps$hexlengthFull, hseq=longPeps$hseq, hseqFull=longPeps$hseqFull, hexRs=longPeps$hexRs, 
+                       hexRsFull=longPeps$hexRsFull, hexKs = longPeps$hexKs, hexKsfull = longPeps$hexKsFull, RKpercent=longPeps$RKpercent, 
+                       RKpercentFull=longPeps$RKpercentFull)
+shortPeps <- data.frame(tId=shortPeps$tId, subseq=shortPeps$subseq, sublength=shortPeps$sublength, start=shortPeps$start, end=shortPeps$end,
+                       start50=shortPeps$start50, end50=shortPeps$end50, cut1=shortPeps$cut1, cut2=shortPeps$cut2, hexlength=shortPeps$hexlength, 
+                       hexlengthFull=shortPeps$hexlengthFull, hseq=shortPeps$hseq, hseqFull=shortPeps$hseqFull, hexRs=shortPeps$hexRs, 
+                       hexRsFull=shortPeps$hexRsFull, hexKs = shortPeps$hexKs, hexKsfull = shortPeps$hexKsFull, RKpercent=shortPeps$RKpercent, 
+                       RKpercentFull=shortPeps$RKpercentFull)
+
+
+
+allPeps <- rbind(longPeps, shortPeps)
+dim(allPeps)
+min(allPeps$RKpercent) #1.5625
+min(allPeps$RKpercentFull) #1.162791
+
+allPeps <- filter(allPeps, RKpercentFull >= 25)
+dim(allPeps) #leaves me with 43
+min(allPeps$RKpercent) #9.090909
+allPeps
+allPeps1 <- allPeps
+sum(!duplicated(allPeps$tId)) #35 are unique
+allPeps <- filter(allPeps, RKpercent >= 25)
+dim(allPeps) #gives me 26 at 25%
+allPeps2 <- allPeps
+##############Enrichment analysis
+# ###check enrichment
+datdir <- "~/Dropbox/WillseyLab/CPPs"
+mouseCPPs <- read.delim(file.path(datdir, "mouseCPPs.txt"))
+head(mouseCPPs)
+
+#need to merge gene names with tIds
+tId2gId <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
+tId2gId <- tId2gId[,c(1:2)]
+allPepsgId1 <- left_join(allPeps1, tId2gId)
+allPepsgId2 <- left_join(allPeps2, tId2gId)
+
+mouseCPPs <- mouseCPPs[!duplicated(mouseCPPs$mouseEnsembl),] #here, removing all duplicate gIds
+#there are duplicate gIds because some peptides have been found to be CPPs in a) more than 1 experiment, or
+#b) there are multiple regions that act as CPPs. For now, to simplify test, am removing all duplicates from both and just
+#searching on the gId level for genes that seem to have CPP properties.... can easily change this if need be
+#to change this, get rid of this step, and then be sure to keep duplicate gIds below
+
+sum(mouseCPPs$mouseEnsembl %in% tId2gId$gId)/nrow(tId2gId) #.0002929687
+sum(mouseCPPs$mouseEnsembl %in% allPepsgId1$gId)/nrow(allPepsgId1) #.02325581 (don't keep any more this way)
+sum(mouseCPPs$mouseEnsembl %in% allPepsgId2$gId)/nrow(allPepsgId2) #.03846154
+sum(mouseCPPs$mouseEnsembl %in% allPepsgId1$gId) #1
+sum(mouseCPPs$mouseEnsembl %in% allPepsgId2$gId) #1
+
+# /nrow(macExpEns)
+# sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
+# filtMacExp[filtMacExp$gId %in% mouseCPPs$mouseEnsembl,]
+
+
+#This isn't the issue
+sum(missing$gId %in% mouseCPPs$mouseEnsembl)
+sum(missingshort$gId %in% mouseCPPs$mouseEnsembl)
+sum(mouseCPPs$mouseEnsembl %in% mmAA$gId)
+
+
+#####Enrichment analysis
+q <- 0 #number of hits in my list -1
+m <- 18 #number of known CPPs: nrow(mouseCPPs)
+n <- nrow(mmAA_original) - nrow(mouseCPPs) #total - CPPs
+k <- 26 #length of my list; nrow(allPeps1 or allPeps2)
+
+
+phyper(q, m, n, k)
+dhyper(q, m, n, k)
+
+
+
+#####
+#Test
+mmAA2 <- mutate(mmAA_original, length = str_count(seq)) #this creates a column with peptide length
+mmAA2 <- separate(mmAA2, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
+head(mmAA2)
+mmAA2 <- mutate(mmAA2, sublength = str_count(subseq))
+mmAA2 <- mutate(mmAA2, Rc = str_count(subseq, "R")) #number of Rs in the entire peptide
+mmAA2 <- mutate(mmAA2, Kc = str_count(subseq, "K"))
+mmAA2 <- mutate(mmAA2, totalRp = Rc/length * 100) #percentage of Rs in the peptide
+mmAA2 <- mutate(mmAA2, totalKp = Kc/length *100)
+mmAA2 <- mutate(mmAA2, totalRKc = Rc + Kc)
+head(mmAA2)
+dim(mmAA2) #61440, 10
+mmAA2 <- filter(mmAA2, totalRp+totalKp>0)
+dim(mmAA2) #61162, 10
+#This function will count the number of Args in a window of defined size. To make it simpler to use in an apply function, 
+#to change the size of the window, just alter it in the function below (rather than setting as a variable).
+counteR <- function(mmAA) {
+  aastring <- AAString(mmAA)
+  nsR <- letterFrequencyInSlidingView(aastring, 32, "RK") }
+
+
+
+mmAA2$maxRKper32 <- 0
+mmAA2$maxRKper32[mmAA2$length < 32] <- mmAA2$totalRKc[mmAA2$length < 32]
+mmAA2$maxRper32[mmAA2$length >= 32] <- lapply(lapply(mmAA2$seq[mmAA2$length >= 32], counteR), max)
+mmAA2$maxRKper32perc <- 0
+mmAA2$maxRKper32perc[mmAA2$length < 32] <- mmAA2$totalRKc[mmAA2$length < 32]/mmAA2$sublength
 
 
 
@@ -394,146 +515,75 @@ sum(!duplicated(CPPshort.hex$tId)) #30 unique
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#filter to remove unnecessary rows, make df smaller
-mmAAR <- mmAA[mmAA$maxRper15 > 0, ]
-mmAAR$keep <- 0
-mmAAR$keep[mmAAR$length < 15] <- 1
-mmAAR$keep[mmAAR$length >= 15 & mmAAR$maxRper15 >= 4] <- 1
-mmAAR <- subset(mmAAR, keep == 1)
-dim(mmAAR)
-
-mmAAlong <- mmAAR[mmAAR$length >= 15,]
-Rwindows <- lapply(1:29629, function(x) countRswithNames(mmAAlong[x,]))
-RwindowsList <- Rwindows
-Rwindows <- lapply(Rwindows, function(x) mutate(x, pos.num=seq(1:nrow(x))))
-Rwindows <- lapply(Rwindows, subset, R>=4)
-#stopped here; need to add pos.num thing to short ones before combining
-Rwindows <- do.call(rbind, Rwindows)
-
-
-#make dataframe with only tIds aand seqs, so I can add sequences here
-seqs <- data.frame(tId=mmAAlong$tId, seq=mmAAlong$seq)
-names(Rwindows) <- c("R", "tId")
-
-Rdflong <- left_join(Rwindows, seqs)
-
-
-dfshort <- mmAA[mmAA$length < 15,]
-dfshort <- filter(dfshort, Rc > 0)
-Rdfshort <- data.frame(R=dfshort$Rc, tId=dfshort$tId, seq=dfshort$seq)
-Rdfshort$pos.num = 1 #need to make sure columns are in the correct order
-dftest <- rbind(Rdfshort, Rdflong)
-
-
-
-######
-
-
-
-mmAA1 <- mmAA
-#################################################################################################
-#################################################################################################
-
-
-###################################### MACROPHAGE EXP DATA ######################################
-#################################################################################################
-#Add macrophage expression values
-macExpDat <- read.delim(file.path(MEdatdir, "macExpEnsembl.txt"))
-#now check expression
-macExpList <- list(macExpDat[,c(4:13)])
-summary(unlist(macExpList)) #getting quartiles
-head(macExpList[[1]])
-## I will take these maxes and add them to my dataframe. I am only taking maxes because as long as the protein
-## is expressed at a minimum of 110 in one sample, it will stay for further analysis. However, this data can be revisited
-## if we decide that particular tissues are most relevant, or decide to filter based on average, etc.
-macExpDat$max <- apply(macExpDat[,c(4:13)], 1, max)
-maxMacExp <- macExpDat[,c(14:15)]
-names(maxMacExp) <- c("ensId", "macExp")
-mmAA <- left_join(mmAA, maxMacExp, by=c("gId" = "ensId"))
+#with origina mmAA, with no changes made to it
 head(mmAA)
-tail(mmAA)
-mmAA <- mmAA[!duplicated(mmAA$seq),]
-head(mmAA)
-dim(mmAA)
+AA <- separate(mmAA, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
+AA <- dplyr::select(AA, -seq)
+AA <- dplyr::rename(AA, seq=subseq)
+AA <- dplyr::mutate(AA, length = str_count(seq))
+#AA <- filter(AA, length <= 32)
+AA <- dplyr::mutate(AA, Rs = str_count(seq, "R"))
+AA <- dplyr::mutate(AA, Ks = str_count(seq, "K"))
+AA <- filter(AA, (Rs+Ks) >= 1)
+dim(AA) #61162
 
-###################################### SIGNAL PEPTIDE DATA ######################################
-#################################################################################################
+countRKs <- function(seq, name) {
+  #seqInd <- match("seq", colnames(mmAA))
+  #seq <- mmAA[,seqInd]
+  #nameInd <- match("tId", colnames(mmAA))
+  #name <- mmAA[,nameInd]
+  n <- str_count(seq)
+  l <- 32
+  seqtable <- data.frame(substring(seq, 1:(n-l+1), l:n))
+  names(seqtable) <- c("seq")
+  AAseqlist <- lapply(seqtable$seq, AAString)
+  seqtable$pos <- rownames(seqtable)
+  seqtable$tId <- name
+  seqtable <- dplyr::mutate(seqtable, rnames = paste(tId,".",pos, sep=""))
+  rownames(seqtable) <- seqtable$rnames
+  nsR <- lapply(seqtable$seq, str_count, "R|K") 
+  seqtable$maxRK <- data.frame(maxRK=unlist(lapply(nsR, max))) #may work if i get rid of the data.frame here
+  #seqtable <- seqtable[,c(1,2,3,5)]
+  seqtable
+}
 
+AAshort <- mutate(AA[AA$length<32,], RKper32=Rs+Ks)
+dim(AAshort) #755
 
-###################################### ALPHA HELIXES ############################################
-#################################################################################################
-#Write to file for running through prediction server
-AAFasta <- read.delim(file.path(datdir, "filteredListPossibleCPPs.txt"))
-fastaDF <- AAFasta[,c(1,3)]
-#fastaDF$seq <- gsub("[*]","",fastaDF$seq) #now fixed up above
-fast1 <- dataframe2fas(fastaDF, file = "~/Dropbox/WillseyLab/CPPs/filteredFAs/AAs1.fa")
+AA <- filter(AA, length>=32)
+dim(AA) #60407
 
-
-#for rerunning where stars messed stuff up
-#test <- data.frame(mmAASS$tId, mmAASS$seq, mmAASS$length, mmAASS$Prediction)
-#names(test) <- c("tId", "seq", "length", "Prediction")
-##test$seq <- gsub("$[*]", "", test$seq)
-#test$predLength <- data.frame(str_count(test[,4]))
-#test <- mutate(test, lengthLessOne = length - 1)
-#test$eq <- array(0, 2938)
-#head(test)
-#test$eq[is.na(test$predLength)] <- 0
-#test$eq[test$length == test$predLength] <- 0
-#test$eq[test$length != test$predLength] <- 1
-#test$eq[test$lengthLessOne == test$predLength] <- 0
-#test2 <- test[test$eq == 1,]
-#test2$seq <- gsub("[*]", "", test2$seq)
-#test2Fas <- test2[,c(1,2)]
-#fasta2 <- dataframe2fas(test2Fas, file="~/Dropbox/WillseyLab/CPPs/filteredFAs/AAsrerun.fa")
-
-
-#read in secondary structure results
-struct2ry <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_2-1-17.txt")
-struct2ry2 <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_batch2_2-16-17.txt")
-head(struct2ry)
-head(struct2ry2)
-class(struct2ry$Prediction)
-struct2ry$Prediction <- gsub(",","", struct2ry$Prediction)
-struct2ry$Confidence <- gsub(",","", struct2ry$Confidence)
-struct2ry2$Prediction <- gsub(",","", struct2ry2$Prediction)
-struct2ry2$Confidence <- gsub(",","", struct2ry2$Confidence)
-names(struct2ry)
-struct2ry <- struct2ry[!struct2ry$fName %in% struct2ry2$Name,]
-names(struct2ry2) <- c("fName", "Prediction", "Confidence")
-struct2ryAll <- rbind(struct2ry, struct2ry2)
+RKs <- mapply(countRKs, AA$seq, AA$tId)
 
 
-#combine with mmAA dataframe
-mmAA2ndry <- left_join(mmAA, struct2ryAll, by = c("tId"="fName"))
 
 
-#################################################################################################
-#################################################################################################
-#Save dataframe
-mmAAtoSave <- mmAA2ndry
-mmAAtoSave$maxRper15 <- do.call(rbind, mmAAtoSave$maxRper15)
-mmAAtoSave$maxRper15 <- data.frame(mmAAtoSave$maxRper15)
-names(mmAAtoSave) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp", "sigPep", "Prediction", "Confidence")
-#write.table(mmAAtoSave, file.path(outdir, "finalAADataframe.txt"), sep = "\t", quote=F, row.name=F)
-save(mmAAtoSave, file=file.path(outdir, "mmAAFinal.RData"))
+
+names(RKs) <- AA$tId
+RKmaxes <- lapply(1:length(names(RKs)), function(x) max(RKs[[x]]))
+
+
+RKs <- RKwindow[RKmaxes>=4]
+RKsdf <- do.call(rbind, RKs)
+length(names(RKwindow2)) #trims to 6295
+length(names(RKwindow)) #from 7002
+
+RKwindow2 <- lapply(RKwindow2, function(x) subset(x, maxRK >= 4))
+RKwindow2 <- lapply(RKwindow2, function(x) mutate(x, maxRK = unlist(as.list(maxRK))))
+#RKtest <- lapply(RKtest, function(x) mutate(x, maxRK=unlist(as.list(maxRK))))
+
+#row.names(RKwindow2) <- names(RKwindow2)
+RKdf <- rbind.fill(RKwindow2)
+#dftest <- rbind.fill(RKtest)
+head(RKdf)
+names(RKdf) <- c("seq100", "pos", "tId", "maxRK")
+dim(RKdf) #1675892       4
+
+min(RKdf$maxRK) #checking that filter worked; it did
+sum(duplicated(RKdf$tId))
+sum(!duplicated(RKdf$tId)) #6295
+
+
 
 
 
