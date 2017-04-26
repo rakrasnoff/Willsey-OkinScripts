@@ -18,11 +18,46 @@ SPdatdir <- "~/Dropbox/WillseyLab/CPPs/sigPepFiles" #signal peptide files
 MEdatdir <- "~/Dropbox/WillseyLab/CPPs/MacExpDat" #macrophage expression data
 outdir <- "~/Dropbox/WillseyLab/CPPs"
 
-#Adding R content 
-mmAA$seq <- gsub("[*]", "", mmAA$seq) #added this for second run; will fix issues with length and astrixes
+#For initial filter, just to cut down, remove any sequences with less than 4 R+K total
+
+
+
+
+
+#mmAAstop1 <- data.frame(tId=mmAA$tId[grep("[*]",mmAA$seq)], seq=(mmAA$seq[grep("[*]",mmAA$seq)])) 
+#mmAAstop <- data.frame(tId=mmAA$tId, seq=mmAA$seq)
+#class(mmAAstop1$seq) 
+
+# stopSplit <- function(seq, tId) {
+#   splits <- data.frame(seq=strsplit(seq, "[*]"))
+#   splits$tId <- tId
+#   names(splits) <- c("seq", "tId")
+#   splits
+# }
+
+#stoptest <- lapply(1:100, function(x) stopSplit(mmAAstop1$seq[x], mmAAstop1$tId[x]))
+
+# mmAAstop <- lapply(, function(x) data.frame(seq = strsplit(x, "[*]")))
+# names(mmAAstop) <- mmAAstop1$tId
+# dims <- lapply(1:50935, function(x) dim(mmAAstop[[x]]))
+# tester <- as.data.frame(mmAAstop)
+# tester <- rbind.fill(mmAAstop[1:100])
+# tester <- do.call(rbind, mmAAstop)
+
+
+# #Adding R content 
+# #Splitting at stop codons; 
+# mmAA$seq <- gsub("[**]", "*", mmAA$seq) #first, need to get rid of any double stops
+# #Now, need to use lapply to get the correct pieces of each transcript
+# mmAAstop <- lapply(mmAA$seq, function(x) strsplit(x, "[*]"))
+# names(mmAAstop) <- mmAA$tId
+# tester <- do.call(rbind, mmAAstop)
+#this really should be counting in subseq
+mmAA <- separate(mmAA, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
 mmAA <- mutate(mmAA, length = str_count(mmAA$seq)) #this creates a column with peptide length
 mmAA <- mutate(mmAA, Rc = str_count(mmAA$seq, "R")) #number of Rs in the entire peptide
 mmAA <- mutate(mmAA, Rp = Rc/length * 100) #percentage of Rs in the peptide
+mmAA <- mutate(mmAA, sublength = str_count(subseq))
 head(mmAA)
 
 #This function will count the number of Args in a window of defined size. To make it simpler to use in an apply function, 
@@ -97,7 +132,7 @@ mmAA <- left_join(mmAA, SPdf, by=c("tId"= "name"))
 
 dim(mmAA)
 head(mmAA)
-names(mmAA) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp", "SigPep")
+names(mmAA) <- c("tId", "gId", "seq", "subseq", "length", "Rc", "Rp", "sublength", "maxRper15", "macExp", "SigPep")
 
 ###################################### ALPHA HELIXES ############################################
 #################################################################################################
@@ -152,8 +187,8 @@ mmAA2ndry <- left_join(mmAA, struct2ryAll, by = c("tId"="fName"))
 mmAAtoSave <- mmAA2ndry
 mmAAtoSave$maxRper15 <- do.call(rbind, mmAAtoSave$maxRper15)
 mmAAtoSave$maxRper15 <- data.frame(mmAAtoSave$maxRper15)
-names(mmAAtoSave) <- c("tId", "gId", "seq", "length", "Rc", "Rp", "maxRper15", "macExp", "sigPep", "Prediction", "Confidence")
+names(mmAAtoSave) <- c("tId", "gId", "seq", "subseq", "length", "Rc", "Rp", "sublength", "maxRper15", "macExp", "sigPep", "Prediction", "Confidence")
 #write.table(mmAAtoSave, file.path(outdir, "finalAADataframe.txt"), sep = "\t", quote=F, row.name=F)
-save(mmAAtoSave, file=file.path(outdir, "mmAAFinal.RData"))
+save(mmAAtoSave, file=file.path(outdir, "mmAAFinal_buildDF1.RData"))
 
 

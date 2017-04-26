@@ -72,7 +72,6 @@ dim(mmSP) #gives me 7771, none are duplicated
 #save(mmSP, file=file.path(outdir, "mmSP.RData"))
 load(file.path(outdir, "mmSP.RData"))
 mmAA <- mmSP #7771
-#Filtering by SRP round 2- I ran all of the subsequences, and none of the y/n predictions changed
 
 ####################################################################################################
 ###4. Filter by R and K presence  FROM HERE DOWN, ONLY HAVE INFO ON LONG TRANSCRIPTS (>100)
@@ -112,6 +111,7 @@ mmAAlong <- mmAA[mmAA$sublength >= 100,] #6916 rows
 
 #########RKwindow <- mapply(countRKs, mmAAlong$subseq, mmAAlong$tId, SIMPLIFY=FALSE)######
 #save(RKwindow, file=file.path(outdir, "RKwindowOutput.RData"))
+load(file.path(outdir, "RKwindowOutput.RData"))
 ######USE LOAD INSTEAD OF RERUNNING###############
 
 load(file.path(outdir, "RKwindowOutput.RData"))
@@ -140,6 +140,13 @@ sum(!duplicated(RKdf$tId)) #6295
 ##########Saving RKdf and mmAAlong#########
 save(RKdf, mmAAlong, file=file.path(outdir, "RKdf_mmAAlong.RData"))
 load(file.path(outdir, "RKdf_mmAAlong.RData"))
+tIds <- data.frame(tId=unique(RKdf$tId))
+nrow(tIds)
+tId2gId <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
+tId2gId <- tId2gId[,c(1:2)]
+RKtIds<- left_join(tIds, tId2gId)
+sum(mouseEns_unique %in% RKtIds$gId)
+#Still 8 present
 ####################################################################################################
 ###5. Add alpha helix content
 ####################################################################################################
@@ -188,6 +195,7 @@ head(CPP, 100)
 
 head(CPP)
 CPP.pred <- CPP[is.na(CPP$Prediction)==F,] #this filters out remaining peptides with no structure predictions
+CPP.pred <- CPP[grep("H", CPP.pred$Prediction),] 
 dim(CPP)
 dim(CPP.pred) #777889
 sum(!duplicated(CPP$tId)) #6295
@@ -206,7 +214,7 @@ dim(CPP.u) #4881 x 14
 #Get rid of seq100 - here, it is just giving me a random seq100, based on whatever was left over
 CPP.u <- CPP.u[,-c(10,11,12)] #also getting rid of position and maxRK for seq100
 dim(CPP.u) #4881 x 11
-
+save(CPP.u, CPP.pred, CPP, file=file.path(outdir, "CPPdfs.RData"))
 
 #Now, I will run hexsplit on CPP.u
 hexSplit <- function(Prediction) {
@@ -244,6 +252,7 @@ load("~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
 names(splitHexes) <- CPP.u$tId
 splitHexesDf <- do.call(rbind, splitHexes)
 save(splitHexesDf, file=file.path(outdir, "splitHexesDf.RData"))
+load(file=file.path(outdir, "splitHexesDf.RData"))
 head(splitHexesDf)
 splitHexesDf$tId <- do.call(rbind, strsplit(rownames(splitHexesDf), "[.]"))[,1]
 head(splitHexesDf)
@@ -282,7 +291,7 @@ dim(CPP.hex)
 head(CPP.hex)
 
 length(unique(mmAA2cut$tId)) #4662 unique ones
-
+length(unique(CPP.hex$tId))
 #Not sure what else I want to do to filter, so I'm going to move on to shorter ones now
 
 ####################################################################################################
@@ -291,6 +300,15 @@ length(unique(mmAA2cut$tId)) #4662 unique ones
 mmAA <- mutate(mmAA, sublength=str_count(subseq))
 mmAAshort <- filter(mmAA, sublength < 100)
 dim(mmAAshort) #769, 7
+
+#How many short transcripts on known list?
+tIds <- data.frame(tId=unique(mmAAshort$tId))
+nrow(tIds)
+tId2gId <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
+tId2gId <- tId2gId[,c(1:2)]
+mmAAshortIds<- left_join(tIds, tId2gId)
+sum(mouseEns_unique %in% mmAAshortIds$gId)
+
 
 countRKshort <- function(mmAA) {
   aastring <- AAString(mmAA)
@@ -302,8 +320,18 @@ mmAAshort$maxRKper16<- lapply(lapply(mmAAshort$subseq, countRKshort), max)
 mmAAshort <- filter(mmAAshort, maxRKper16 >= 4)
 dim(mmAAshort) #leaves me with 373 
 
+#How many short transcripts on known list?
+tIds <- data.frame(tId=unique(mmAAshort$tId))
+nrow(tIds)
+tId2gId <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
+tId2gId <- tId2gId[,c(1:2)]
+mmAAshortIds<- left_join(tIds, tId2gId)
+sum(mouseEns_unique %in% mmAAshortIds$gId)
+
+
 CPPshort <- inner_join(mmAAshort, struct2ryAll, by = c("tId"="fName"))
 dim(CPPshort) #105 x 14 : missing 268 of them
+CPPshort.H <- CPPshort.pred[grep("H",CPPshort$Prediction),]
 
 ######IMPORTANT: THESE PEPTIDES DO NOT HAVE SECONDARY STRUCTURE PREDICTIONS###########
 missingshort <- mmAAshort[!(mmAAshort$tId %in% struct2ryAll$fName),]
@@ -344,13 +372,19 @@ hexSplit <- function(Prediction) {
 
 splitHexesShort <- lapply(CPPshort$Prediction, hexSplit)
 save(splitHexesShort, file="~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.txt")
-load("~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
+load("~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.txt")
 
 names(splitHexesShort) <- CPPshort$tId
 splitHexesDfshort <- do.call(rbind, splitHexesShort)
 splitHexesDfshort$tId <- do.call(rbind, strsplit(rownames(splitHexesDfshort), "[.]"))[,1]
 save(splitHexesDfshort, file=file.path(outdir, "splitHexesDfshort.RData"))
+load(file=file.path(outdir, "splitHexesDfshort.RData"))
 dim(splitHexesDfshort) #218     3
+#####Enrichment
+shortIds <- data.frame(tId=splitHexesDfshort$tId)
+shortIds <- left_join(shortIds, tId2gId)
+sum(shortIds$gId %in% mouseEns_unique)
+
 
 #merge info with sequences
 CPPshort.pred <- data.frame(tId = CPPshort$tId, subseq = CPPshort$subseq, sublength=CPPshort$sublength)
@@ -423,16 +457,22 @@ allPeps <- rbind(longPeps, shortPeps)
 dim(allPeps)
 min(allPeps$RKpercent) #1.5625
 min(allPeps$RKpercentFull) #1.162791
+save(allPeps, file=file.path(outdir, "allPepsCPP.RData"))
+load(file=file.path(outdir, "allPepsCPP.RData"))
 
-allPeps <- filter(allPeps, RKpercentFull >= 25)
-dim(allPeps) #leaves me with 43
-min(allPeps$RKpercent) #9.090909
-allPeps
-allPeps1 <- allPeps
-sum(!duplicated(allPeps$tId)) #35 are unique
-allPeps <- filter(allPeps, RKpercent >= 25)
-dim(allPeps) #gives me 26 at 25%
-allPeps2 <- allPeps
+allPepsRKFull <- filter(allPeps, RKpercentFull >= 25)
+dim(allPepsRKFull) #leaves me with 43
+write.table(allPepsRKFull, file=file.path(outdir, "pipeline2_25percAroundHex.txt"), sep="\t", quote=F)
+min(allPepsRKFull$RKpercent) #9.090909
+sum(!duplicated(allPepsRKFull$tId)) #35 are unique
+allPepsRK <- filter(allPeps, RKpercent >= 25)
+allPepsRK2 <- filter(allPeps, RKpercent >= 50)
+write.table(allPepsRK, file=file.path(outdir, "pipeline2_25percOnHex.txt"), sep="\t", quote=F)
+write.table(allPepsRK2, file=file.path(outdir, "pipeline2_50percOnHex.txt"), sep="\t", quote=F)
+dim(allPepsRK) 
+dim(allPepsRK2)
+sum(!duplicated(allPepsRK$tId))
+sum(!duplicated(allPepsRK2$tId))
 ##############Enrichment analysis
 # ###check enrichment
 datdir <- "~/Dropbox/WillseyLab/CPPs"
@@ -442,8 +482,12 @@ head(mouseCPPs)
 #need to merge gene names with tIds
 tId2gId <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
 tId2gId <- tId2gId[,c(1:2)]
-allPepsgId1 <- left_join(allPeps1, tId2gId)
-allPepsgId2 <- left_join(allPeps2, tId2gId)
+allPepsRKFull <- left_join(allPepsRKFull, tId2gId)
+allPepsRK <- left_join(allPepsRK, tId2gId)
+allPepsRK2 <- left_join(allPepsRK2, tId2gId)
+write.table(allPepsRKFull, file=file.path(outdir, "pipeline2_25percAroundHex.txt"), sep="\t", quote=F)
+write.table(allPepsRK, file=file.path(outdir, "pipeline2_25percOnHex.txt"), sep="\t", quote=F)
+write.table(allPepsRK2, file=file.path(outdir, "pipeline2_50percOnHex.txt"), sep="\t", quote=F)
 
 mouseCPPs <- mouseCPPs[!duplicated(mouseCPPs$mouseEnsembl),] #here, removing all duplicate gIds
 #there are duplicate gIds because some peptides have been found to be CPPs in a) more than 1 experiment, or
@@ -451,11 +495,11 @@ mouseCPPs <- mouseCPPs[!duplicated(mouseCPPs$mouseEnsembl),] #here, removing all
 #searching on the gId level for genes that seem to have CPP properties.... can easily change this if need be
 #to change this, get rid of this step, and then be sure to keep duplicate gIds below
 
-sum(mouseCPPs$mouseEnsembl %in% tId2gId$gId)/nrow(tId2gId) #.0002929687
-sum(mouseCPPs$mouseEnsembl %in% allPepsgId1$gId)/nrow(allPepsgId1) #.02325581 (don't keep any more this way)
-sum(mouseCPPs$mouseEnsembl %in% allPepsgId2$gId)/nrow(allPepsgId2) #.03846154
-sum(mouseCPPs$mouseEnsembl %in% allPepsgId1$gId) #1
-sum(mouseCPPs$mouseEnsembl %in% allPepsgId2$gId) #1
+sum(mouseCPPs$mouseEnsembl %in% unique(tId2gId$gId)/sum(!duplicated(tId2gId$gId))) #.0007918353
+sum(mouseCPPs$mouseEnsembl %in% unique(allPepsRKFull$gId))/sum(!duplicated(allPepsRKFull$gId)) #1 peptdie, #.041666667 (don't keep any more this way)
+sum(mouseCPPs$mouseEnsembl %in% unique(allPepsRK$gId))/sum(!duplicated(allPepsRK$gId)) #5peptides, #.003663004
+sum(mouseCPPs$mouseEnsembl %in% unique(allPepsRK2$gId))/sum(!duplicated(allPepsRK2$gId))#1peptide, #.002747253
+
 
 # /nrow(macExpEns)
 # sum(mouseCPPs$mouseEnsembl %in% filtMacExp$gId)/nrow(filtMacExp)
@@ -469,13 +513,19 @@ sum(mouseCPPs$mouseEnsembl %in% mmAA$gId)
 
 
 #####Enrichment analysis
-q <- 0 #number of hits in my list -1
-m <- 18 #number of known CPPs: nrow(mouseCPPs)
-n <- nrow(mmAA_original) - nrow(mouseCPPs) #total - CPPs
-k <- 26 #length of my list; nrow(allPeps1 or allPeps2)
+q <-  #number of hits in my list -1
+m <-  #number of known CPPs: nrow(mouseCPPs)
+n <-  #total - CPPs
+k <-  #length of my list; nrow(allPeps1 or allPeps2)
+
+phyper(0, )
 
 
-phyper(q, m, n, k)
+phyper(4, 18, 22737-18, 1365)
+phyper(0, 18, 22737-18, 364)
+phyper(0, 18, 22737-18, 24)
+
+
 dhyper(q, m, n, k)
 
 
@@ -489,7 +539,7 @@ mmAA2 <- mutate(mmAA2, sublength = str_count(subseq))
 mmAA2 <- mutate(mmAA2, Rc = str_count(subseq, "R")) #number of Rs in the entire peptide
 mmAA2 <- mutate(mmAA2, Kc = str_count(subseq, "K"))
 mmAA2 <- mutate(mmAA2, totalRp = Rc/length * 100) #percentage of Rs in the peptide
-mmAA2 <- mutate(mmAA2, totalKp = Kc/length *100)
+mmAA2 <- mutate(mmAA2, totalKp = Kc/length * 100)
 mmAA2 <- mutate(mmAA2, totalRKc = Rc + Kc)
 head(mmAA2)
 dim(mmAA2) #61440, 10
@@ -504,86 +554,48 @@ counteR <- function(mmAA) {
 
 
 mmAA2$maxRKper32 <- 0
-mmAA2$maxRKper32[mmAA2$length < 32] <- mmAA2$totalRKc[mmAA2$length < 32]
-mmAA2$maxRper32[mmAA2$length >= 32] <- lapply(lapply(mmAA2$seq[mmAA2$length >= 32], counteR), max)
+mmAA2$maxRKper32[mmAA2$sublength < 32] <- mmAA2$totalRKc[mmAA2$sublength < 32]
+mmAA2$maxRKper32[mmAA2$sublength >= 32] <- lapply(lapply(mmAA2$seq[mmAA2$sublength >= 32], counteR), max)
 mmAA2$maxRKper32perc <- 0
-mmAA2$maxRKper32perc[mmAA2$length < 32] <- mmAA2$totalRKc[mmAA2$length < 32]/mmAA2$sublength
+AAshort <- filter(mmAA2, sublength < 32)
+AAlong <- filter(mmAA2, sublength >=32)
 
 
+AAshort$sublength <- as.numeric(AAshort$sublength)
+AAshort$maxRKper32 <- as.numeric(AAshort$maxRKper32)
+AAshort <- mutate(AAshort, maxRKperc = maxRKper32/sublength)
+AAlong$sublength <- as.numeric(AAlong$sublength)
+AAlong$maxRKper32 <- as.numeric(AAlong$maxRKper32)
+AAlong <- mutate(AAlong, maxRKperc = maxRKper32/32)
+dim(AAshort)
+dim(AAlong)
 
+AAshortf <- filter(AAshort, maxRKperc > .50)
+AAlongf <- filter(AAlong, maxRKperc > .50)
+dim(AAshortf)
+dim(AAlongf)
 
+AAsl <- rbind(AAshortf, AAlongf)
+dim(AAsl)
+head(AAsl)
+sum(mouseCPPs$mouseEnsembl %in% AAsl$gId)
+sum(mouseCPPs$mouseEnsembl %in% mmAA2$gId)
+dim(AAsl)
+sum(!duplicated(AAsl$tId))
+sum(!duplicated(AAsl$gId))
+#gives me 54836 when filter at .25
+18/22737
+sum(mouseCPPs$mouseEnsembl %in% AAsl$gId)/nrow(AAsl)
 
+#q <- 0 #number of hits in my list -1
+#m <- 18 #number of known CPPs: nrow(mouseCPPs)
+#n <- nrow(mmAA_original) - nrow(mouseCPPs) #total - CPPs
+#k <- 26 #length of my list; nrow(allPeps1 or allPeps2)
 
-
-#with origina mmAA, with no changes made to it
-head(mmAA)
-AA <- separate(mmAA, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
-AA <- dplyr::select(AA, -seq)
-AA <- dplyr::rename(AA, seq=subseq)
-AA <- dplyr::mutate(AA, length = str_count(seq))
-#AA <- filter(AA, length <= 32)
-AA <- dplyr::mutate(AA, Rs = str_count(seq, "R"))
-AA <- dplyr::mutate(AA, Ks = str_count(seq, "K"))
-AA <- filter(AA, (Rs+Ks) >= 1)
-dim(AA) #61162
-
-countRKs <- function(seq, name) {
-  #seqInd <- match("seq", colnames(mmAA))
-  #seq <- mmAA[,seqInd]
-  #nameInd <- match("tId", colnames(mmAA))
-  #name <- mmAA[,nameInd]
-  n <- str_count(seq)
-  l <- 32
-  seqtable <- data.frame(substring(seq, 1:(n-l+1), l:n))
-  names(seqtable) <- c("seq")
-  AAseqlist <- lapply(seqtable$seq, AAString)
-  seqtable$pos <- rownames(seqtable)
-  seqtable$tId <- name
-  seqtable <- dplyr::mutate(seqtable, rnames = paste(tId,".",pos, sep=""))
-  rownames(seqtable) <- seqtable$rnames
-  nsR <- lapply(seqtable$seq, str_count, "R|K") 
-  seqtable$maxRK <- data.frame(maxRK=unlist(lapply(nsR, max))) #may work if i get rid of the data.frame here
-  #seqtable <- seqtable[,c(1,2,3,5)]
-  seqtable
-}
-
-AAshort <- mutate(AA[AA$length<32,], RKper32=Rs+Ks)
-dim(AAshort) #755
-
-AA <- filter(AA, length>=32)
-dim(AA) #60407
-
-RKs <- mapply(countRKs, AA$seq, AA$tId)
-
-
-
-
-
-names(RKs) <- AA$tId
-RKmaxes <- lapply(1:length(names(RKs)), function(x) max(RKs[[x]]))
-
-
-RKs <- RKwindow[RKmaxes>=4]
-RKsdf <- do.call(rbind, RKs)
-length(names(RKwindow2)) #trims to 6295
-length(names(RKwindow)) #from 7002
-
-RKwindow2 <- lapply(RKwindow2, function(x) subset(x, maxRK >= 4))
-RKwindow2 <- lapply(RKwindow2, function(x) mutate(x, maxRK = unlist(as.list(maxRK))))
-#RKtest <- lapply(RKtest, function(x) mutate(x, maxRK=unlist(as.list(maxRK))))
-
-#row.names(RKwindow2) <- names(RKwindow2)
-RKdf <- rbind.fill(RKwindow2)
-#dftest <- rbind.fill(RKtest)
-head(RKdf)
-names(RKdf) <- c("seq100", "pos", "tId", "maxRK")
-dim(RKdf) #1675892       4
-
-min(RKdf$maxRK) #checking that filter worked; it did
-sum(duplicated(RKdf$tId))
-sum(!duplicated(RKdf$tId)) #6295
-
-
+#none were present, I was just messing with values
+#phyper(12, 18, 22737-18, 15861)
+#dhyper(12-1, 18, 22737-18, 15861)
+write.table(AAsl, file=file.path(outdir, "simplePipelineCPPs41717.txt"), sep="\t", quote=F)
 
 
 
