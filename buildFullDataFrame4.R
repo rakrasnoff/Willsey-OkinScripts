@@ -11,9 +11,11 @@ library(tidyr)
 ####################################################################################################
 ### Set directories
 ####################################################################################################
-SPdatdir <- "~/Dropbox/WillseyLab/CPPs/sigPepFiles" #signal peptide files
-MEdatdir <- "~/Dropbox/WillseyLab/CPPs/MacExpDat" #macrophage expression data
-outdir <- "~/Dropbox/WillseyLab/CPPs"
+SPdatdir <- "~/Dropbox/WillseyLab/CPPs/data/sigPepFiles" #signal peptide files
+MEdatdir <- "~/Dropbox/WillseyLab/CPPs/data/MacExpDat" #macrophage expression data
+outdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline2/output"
+datdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline2/data"
+wrkdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline2/working"
 
 
 ####################################################################################################
@@ -31,10 +33,17 @@ dim(mmAA) #61440 by 3
 ### Remove any sequence that occurs after a stop
 ####################################################################################################
 
-mmAA <- mutate(mmAA, length = str_count(seq)) #this creates a column with peptide length
 mmAA <- separate(mmAA, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
+mmAA <- mutate(mmAA, sublength = str_count(subseq)) #this creates a column with peptide length
 head(mmAA)
 tail(mmAA)
+#total with long reads: this is mainly for macrophage expression enrichment analyses
+dim(filter(mmAA, sublength >=100))
+mmAAlongFULL <- filter(mmAA, sublength >= 100)
+save(mmAAlongFULL, file=file.path(wrkdir, "mmAAlongFULL.RData"))
+dim(filter(mmAA, sublength < 100))
+mmAAshortFULL <- filter(mmAA, sublength < 100)
+save(mmAAshortFULL, file=file.path(wrkdir, "mmAAshortFULL.RData"))
 
 ####################################################################################################
 ###3. Filter by presence of SRP
@@ -44,7 +53,7 @@ files <- dir(SPdatdir)
 
 #Read in files
 SPs <- lapply(files, function(x) { 
-  SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/sigPepFiles", x))
+  SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/data/sigPepFiles", x))
 })
 head(SPs[[1]])
 head(SPs[[2]])
@@ -69,8 +78,8 @@ names(mmAASP) <- c("tId", "gId", "seq", "subseq", "length", "sigPep")
 mmSP <- filter(mmAASP, sigPep != "N")
 dim(mmSP) #gives me 7771, none are duplicated
 #Now, each of these 7771 sequences needs to be run through the prediction server
-#save(mmSP, file=file.path(outdir, "mmSP.RData"))
-load(file.path(outdir, "mmSP.RData"))
+save(mmSP, file=file.path(wrkdir, "mmSP.RData"))
+load(file.path(wrkdir, "mmSP.RData"))
 mmAA <- mmSP #7771
 
 ####################################################################################################
@@ -83,7 +92,7 @@ mmAA <- mutate(mmAA, Kc = str_count(mmAA$subseq, "K"))
 mmAA <- mutate(mmAA, Rp = Rc/length * 100) #percentage of Rs in the peptide
 mmAA <- mutate(mmAA, Kp = Kc/length *100)
 head(mmAA)
-dim(mmAA) #7771 x 11
+dim(mmAA) #7771 x 11 #should fix this, make all sublength
 
 #This function will count the number of Args and Lys in a window of defined size. To make it simpler to use in an apply function, 
 #to change the size of the window, just alter it in the function below (rather than setting as a variable).
@@ -110,12 +119,15 @@ countRKs <- function(seq, name) {
 mmAAlong <- mmAA[mmAA$sublength >= 100,] #6916 rows
 
 #########RKwindow <- mapply(countRKs, mmAAlong$subseq, mmAAlong$tId, SIMPLIFY=FALSE)######
-#save(RKwindow, file=file.path(outdir, "RKwindowOutput.RData"))
-load(file.path(outdir, "RKwindowOutput.RData"))
+save(RKwindow, file=file.path(wrkdir, "RKwindowOutput.RData"))
+load(file.path(wrkdir, "RKwindowOutput.RData"))
 ######USE LOAD INSTEAD OF RERUNNING###############
 
-load(file.path(outdir, "RKwindowOutput.RData"))
 names(RKwindow) <- mmAAlong$tId
+#########RKwindow <- mapply(countRKs, mmAAlong$subseq, mmAAlong$tId, SIMPLIFY=FALSE)######
+save(RKwindow, file=file.path(wrkdir, "RKwindowOutput.RData"))
+load(file.path(wrkdir, "RKwindowOutput.RData"))
+######USE LOAD INSTEAD OF RERUNNING###############
 #names(RKtest) <- mmAAlong$tId[1:3]
 sum(duplicated(mmAAlong$tId)) #none
 maxes <- lapply(1:7002, function(x) max(RKwindow[[x]]$maxRK))
@@ -126,9 +138,7 @@ RKwindow2 <- lapply(RKwindow2, function(x) subset(x, maxRK >= 4))
 RKwindow2 <- lapply(RKwindow2, function(x) mutate(x, maxRK = unlist(as.list(maxRK))))
 #RKtest <- lapply(RKtest, function(x) mutate(x, maxRK=unlist(as.list(maxRK))))
 
-#row.names(RKwindow2) <- names(RKwindow2)
 RKdf <- rbind.fill(RKwindow2)
-#dftest <- rbind.fill(RKtest)
 head(RKdf)
 names(RKdf) <- c("seq100", "pos", "tId", "maxRK")
 dim(RKdf) #1675892       4
@@ -138,23 +148,28 @@ sum(duplicated(RKdf$tId))
 sum(!duplicated(RKdf$tId)) #6295
 
 ##########Saving RKdf and mmAAlong#########
-save(RKdf, mmAAlong, file=file.path(outdir, "RKdf_mmAAlong.RData"))
-load(file.path(outdir, "RKdf_mmAAlong.RData"))
+save(RKdf, file=file.path(wrkdir, "RKdf.RData"))
+save(RKdf, mmAAlong, file=file.path(wrkdir, "RKdf_mmAAlong.RData"))
+#load(file.path(wkrdir, "RKdf_mmAAlong.RData"))
 tIds <- data.frame(tId=unique(RKdf$tId))
-nrow(tIds)
+nrow(tIds) #6295
 tId2gId <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
 tId2gId <- tId2gId[,c(1:2)]
+save(tId2gId, file=file.path(datdir, "tId2gId.RData"))
 RKtIds<- left_join(tIds, tId2gId)
+save(RKtIds, file=file.path(wrkdir, "RKdftId2gId.RData"))
+RKgIds <- left_join(RKdf, tId2gId)
+dim(RKgIds)
 sum(mouseEns_unique %in% RKtIds$gId)
 #Still 8 present
 ####################################################################################################
 ###5. Add alpha helix content
 ####################################################################################################
-
 #read in secondary structure results
-struct2ry <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_2-1-17.txt")
-struct2ry2 <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_batch2_2-16-17.txt")
-struct2ry3 <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_partial_results_03-16-17.txt") #6011
+SSdatdir <- "~/Dropbox/WillseyLab/CPPs/data/2ndryStruct"
+struct2ry <- read.delim(file.path(SSdatdir, "merged_jpred_results_2-1-17.txt"))
+struct2ry2 <- read.delim(file.path(SSdatdir, "merged_jpred_results_batch2_2-16-17.txt"))
+struct2ry3 <- read.delim(file.path(SSdatdir, "merged_partial_results_03-16-17.txt")) #6011
 head(struct2ry)
 head(struct2ry2)
 head(struct2ry3)
@@ -175,6 +190,7 @@ struct2ry3 <- struct2ry3[!(struct2ry3$Name %in% struct2ryAll$fName),] #4144 left
 dim(struct2ry3) #4144, 3
 names(struct2ry3) <- c("fName", "Prediction", "Confidence")
 struct2ryAll <- rbind(struct2ryAll, struct2ry3)
+save(struct2ryAll, file=file.path(wrkdir, "struct2ryAll.RData"))
 dim(struct2ryAll) #8029, 3
 
 #combine with mmAA dataframe
@@ -189,6 +205,7 @@ CPP <- data.frame(tId=CPPdf$tId, gId=CPPdf$gId, fullseq=CPPdf$seq, fulllength=CP
 dim(CPP) #1675892, 14
 
 head(CPP, 100)
+save(CPP, file=file.path(wrkdir, "mmAAWithStructPreds.RData"))
 ####################################################################################################
 ###6. Filter by alpha helixes
 ####################################################################################################
@@ -196,11 +213,14 @@ head(CPP, 100)
 head(CPP)
 CPP.pred <- CPP[is.na(CPP$Prediction)==F,] #this filters out remaining peptides with no structure predictions
 CPP.pred <- CPP[grep("H", CPP.pred$Prediction),] 
+save(CPP.pred, file=file.path(wrkdir, "mmAAWithStructPredsOnly.RData"))
 dim(CPP)
 dim(CPP.pred) #777889
 sum(!duplicated(CPP$tId)) #6295
 sum(!duplicated(CPP.pred$tId)) #4881 - meaning I have predictions for 4881 peptides here. Above, I have predictions for 8029 peptides; however, 
 #only 4883 of these are for peptides >100 AA. Thus, I am missing predictions for >1000 peptides that contain a signal peptide, and are at least 100 AA long. 
+
+
 
 ######IMPORTANT: THESE PEPTIDES DO NOT HAVE SECONDARY STRUCTURE PREDICTIONS###########
 missing <- CPP[!(CPP$tId %in% CPP.pred$tId),]
@@ -246,13 +266,13 @@ hexSplit <- function(Prediction) {
 }
 
 #splitHexes <- lapply(CPP.u$Prediction, hexSplit)
-#save(splitHexes, file="~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
-load("~/Dropbox/WillseyLab/CPPs/hexsplitoutput.txt")
+#save(splitHexes, file=file.path(wrkdir, hexsplitoutputLong.txt")
+#load(file.path) #don't use these, load dataframe below instead
 
 names(splitHexes) <- CPP.u$tId
 splitHexesDf <- do.call(rbind, splitHexes)
-save(splitHexesDf, file=file.path(outdir, "splitHexesDf.RData"))
-load(file=file.path(outdir, "splitHexesDf.RData"))
+save(splitHexesDf, file=file.path(wrkdir, "splitHexesDfLong.RData"))
+load(file=file.path(wrkdir, "splitHexesDfLong.RData"))
 head(splitHexesDf)
 splitHexesDf$tId <- do.call(rbind, strsplit(rownames(splitHexesDf), "[.]"))[,1]
 head(splitHexesDf)
@@ -285,13 +305,14 @@ mmAA2cut <- mutate(mmAA2cut, hexlength = str_count(hseq))
 mmAA2cut <- mutate(mmAA2cut, RKpercentFull=((hexRsFull+hexKsFull)/hexlengthFull)*100)
 mmAA2cut <- mutate(mmAA2cut, RKpercent = ((hexRs+hexKs)/hexlength)*100)
 
-CPP.hex <- filter(mmAA2cut, RKpercent > 0)
+CPP.hex <- filter(mmAA2cut, RKpercent > 0) #need to consider removing this step
 dim(mmAA2cut)
 dim(CPP.hex)
 head(CPP.hex)
 
 length(unique(mmAA2cut$tId)) #4662 unique ones
 length(unique(CPP.hex$tId))
+save(CPP.hex, file=file.path(wrkdir, "CPPhex.RData"))
 #Not sure what else I want to do to filter, so I'm going to move on to shorter ones now
 
 ####################################################################################################
@@ -319,6 +340,8 @@ names(RKwindowsShort) <- mmAAshort$tId
 mmAAshort$maxRKper16<- lapply(lapply(mmAAshort$subseq, countRKshort), max)
 mmAAshort <- filter(mmAAshort, maxRKper16 >= 4)
 dim(mmAAshort) #leaves me with 373 
+RKdfShort <- mmAAshort
+save(RKdfShort, file=file.path(wrkdir, "RKdfShort.RData"))
 
 #How many short transcripts on known list?
 tIds <- data.frame(tId=unique(mmAAshort$tId))
@@ -332,6 +355,8 @@ sum(mouseEns_unique %in% mmAAshortIds$gId)
 CPPshort <- inner_join(mmAAshort, struct2ryAll, by = c("tId"="fName"))
 dim(CPPshort) #105 x 14 : missing 268 of them
 CPPshort.H <- CPPshort.pred[grep("H",CPPshort$Prediction),]
+save(CPPshort.H, file=file.path(wrkdir, "CPPshort.H"))
+
 
 ######IMPORTANT: THESE PEPTIDES DO NOT HAVE SECONDARY STRUCTURE PREDICTIONS###########
 missingshort <- mmAAshort[!(mmAAshort$tId %in% struct2ryAll$fName),]
@@ -371,14 +396,14 @@ hexSplit <- function(Prediction) {
 
 
 splitHexesShort <- lapply(CPPshort$Prediction, hexSplit)
-save(splitHexesShort, file="~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.txt")
-load("~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.txt")
+save(splitHexesShort, file="~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.RData")
+load("~/Dropbox/WillseyLab/CPPs/hexsplitoutputShort.RData")
 
 names(splitHexesShort) <- CPPshort$tId
 splitHexesDfshort <- do.call(rbind, splitHexesShort)
 splitHexesDfshort$tId <- do.call(rbind, strsplit(rownames(splitHexesDfshort), "[.]"))[,1]
-save(splitHexesDfshort, file=file.path(outdir, "splitHexesDfshort.RData"))
-load(file=file.path(outdir, "splitHexesDfshort.RData"))
+save(splitHexesDfshort, file=file.path(wkrdir, "splitHexesDfshort.RData"))
+load(file=file.path(wrkdir, "splitHexesDfshort.RData"))
 dim(splitHexesDfshort) #218     3
 #####Enrichment
 shortIds <- data.frame(tId=splitHexesDfshort$tId)
@@ -411,7 +436,9 @@ CPPshort.pred <- mutate(CPPshort.pred, hexlength = str_count(hseq))
 
 CPPshort.pred <- mutate(CPPshort.pred, RKpercentFull=((hexRsFull+hexKsFull)/hexlengthFull)*100)
 CPPshort.pred <- mutate(CPPshort.pred, RKpercent = ((hexRs+hexKs)/hexlength)*100)
+save(CPPshort.pred, file=file.path(wrkdir, "CPPshort_pred.RData"))
 
+#CPPshort.pred should be recombined
 CPPshort.hex <- filter(CPPshort.pred, RKpercent > 0)
 dim(CPPshort.pred)
 dim(CPPshort.hex) #112 remaining
@@ -434,7 +461,7 @@ longPeps <- filter(mmAA2cut, (hexRs+hexKs) > 0)
 longPeps$RKpercent[is.na(longPeps$RKpercent)==T] <- 0 #0/0 giving some NAs - removed and made 0
 longPeps$RKpercentFull[is.na(longPeps$RKpercent)==T] <- 0
 
-shortPeps <- CPPshort.hex
+shortPeps <- CPPshort.pred
 
 colnames(longPeps)
 colnames(shortPeps)
@@ -457,8 +484,8 @@ allPeps <- rbind(longPeps, shortPeps)
 dim(allPeps)
 min(allPeps$RKpercent) #1.5625
 min(allPeps$RKpercentFull) #1.162791
-save(allPeps, file=file.path(outdir, "allPepsCPP.RData"))
-load(file=file.path(outdir, "allPepsCPP.RData"))
+save(allPeps, file=file.path(wrkdir, "allPepsCPP.RData"))
+load(file=file.path(wrkdir, "allPepsCPP.RData"))
 
 allPepsRKFull <- filter(allPeps, RKpercentFull >= 25)
 dim(allPepsRKFull) #leaves me with 43
@@ -466,6 +493,7 @@ write.table(allPepsRKFull, file=file.path(outdir, "pipeline2_25percAroundHex.txt
 min(allPepsRKFull$RKpercent) #9.090909
 sum(!duplicated(allPepsRKFull$tId)) #35 are unique
 allPepsRK <- filter(allPeps, RKpercent >= 25)
+save(allPepsRK, file=file.path(wrkdir, "allPepsRK.RData"))
 allPepsRK2 <- filter(allPeps, RKpercent >= 50)
 write.table(allPepsRK, file=file.path(outdir, "pipeline2_25percOnHex.txt"), sep="\t", quote=F)
 write.table(allPepsRK2, file=file.path(outdir, "pipeline2_50percOnHex.txt"), sep="\t", quote=F)

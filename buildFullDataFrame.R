@@ -14,9 +14,9 @@ library(org.Mm.eg.db)
 mmAA <- read.delim("~/Dropbox/WillseyLab/CPPs/MmAAtable.txt")
 
 #Now set directories
-SPdatdir <- "~/Dropbox/WillseyLab/CPPs/sigPepFiles" #signal peptide files
-MEdatdir <- "~/Dropbox/WillseyLab/CPPs/MacExpDat" #macrophage expression data
-outdir <- "~/Dropbox/WillseyLab/CPPs"
+SPdatdir <- "~/Dropbox/WillseyLab/CPPs/data/sigPepFiles" #signal peptide files
+MEdatdir <- "~/Dropbox/WillseyLab/CPPs/data/MacExpDat" #macrophage expression data
+outdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline1/data"
 
 #For initial filter, just to cut down, remove any sequences with less than 4 R+K total
 
@@ -54,10 +54,10 @@ outdir <- "~/Dropbox/WillseyLab/CPPs"
 # tester <- do.call(rbind, mmAAstop)
 #this really should be counting in subseq
 mmAA <- separate(mmAA, seq, c("subseq"), remove=F, sep = "[*]", extra="drop")
-mmAA <- mutate(mmAA, length = str_count(mmAA$seq)) #this creates a column with peptide length
-mmAA <- mutate(mmAA, Rc = str_count(mmAA$seq, "R")) #number of Rs in the entire peptide
-mmAA <- mutate(mmAA, Rp = Rc/length * 100) #percentage of Rs in the peptide
+mmAA <- mutate(mmAA, length = str_count(seq)) #this creates a column with peptide length
 mmAA <- mutate(mmAA, sublength = str_count(subseq))
+mmAA <- mutate(mmAA, Rc = str_count(subseq, "R")) #number of Rs in the piece I am keeping
+mmAA <- mutate(mmAA, Rp = Rc/sublength * 100) #percentage of Rs in the piece I am keeping
 head(mmAA)
 
 #This function will count the number of Args in a window of defined size. To make it simpler to use in an apply function, 
@@ -67,9 +67,9 @@ countRs <- function(mmAA) {
   nsR <- letterFrequencyInSlidingView(aastring, 15, "R") }
 
 mmAA$maxRper15 <- 0
-mmAA$maxRper15[mmAA$length < 15] <- mmAA$Rc[mmAA$length < 15]
-mmAA$maxRper15[mmAA$length >= 15] <- lapply(lapply(mmAA$seq[mmAA$length >= 15], countRs), max)
-
+mmAA$maxRper15[mmAA$sublength < 15] <- mmAA$Rc[mmAA$sublength < 15]
+mmAA$maxRper15[mmAA$sublength >= 15] <- lapply(lapply(mmAA$subseq[mmAA$sublength >= 15], countRs), max)
+dim(mmAA)
 
 #RrichWindows <- RrichWindows[lapply(RrichWindows, max) >= 4]
 
@@ -102,7 +102,8 @@ names(maxMacExp) <- c("ensId", "macExp")
 mmAA <- left_join(mmAA, maxMacExp, by=c("gId" = "ensId"))
 head(mmAA)
 tail(mmAA)
-mmAA <- mmAA[!duplicated(mmAA$seq),]
+
+mmAA <- mmAA[!duplicated(mmAA$tId),] #made a change here - by tId instead of sequence
 head(mmAA)
 dim(mmAA)
 
@@ -112,7 +113,7 @@ files <- dir(SPdatdir)
 
 #Read in files
 SPs <- lapply(files, function(x) { 
-  SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/sigPepFiles", x))
+  SPlist <- read.delim(file.path("~/Dropbox/WillseyLab/CPPs/data/sigPepFiles", x))
 })
 head(SPs[[1]])
 head(SPs[[2]])
@@ -132,7 +133,7 @@ mmAA <- left_join(mmAA, SPdf, by=c("tId"= "name"))
 
 dim(mmAA)
 head(mmAA)
-names(mmAA) <- c("tId", "gId", "seq", "subseq", "length", "Rc", "Rp", "sublength", "maxRper15", "macExp", "SigPep")
+names(mmAA) <- c("tId", "gId", "seq", "subseq", "sublength", "Rc", "Rp", "maxRper15", "macExp", "SigPep")
 
 ###################################### ALPHA HELIXES ############################################
 #################################################################################################
@@ -162,8 +163,8 @@ names(mmAA) <- c("tId", "gId", "seq", "subseq", "length", "Rc", "Rp", "sublength
 
 
 #read in secondary structure results
-struct2ry <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_2-1-17.txt")
-struct2ry2 <- read.delim("~/Dropbox/WillseyLab/CPPs/2ndryStruct/merged_jpred_results_batch2_2-16-17.txt")
+struct2ry <- read.delim("~/Dropbox/WillseyLab/CPPs/data/2ndryStruct/merged_jpred_results_2-1-17.txt")
+struct2ry2 <- read.delim("~/Dropbox/WillseyLab/CPPs/data/2ndryStruct/merged_jpred_results_batch2_2-16-17.txt")
 head(struct2ry)
 head(struct2ry2)
 class(struct2ry$Prediction)
@@ -187,7 +188,7 @@ mmAA2ndry <- left_join(mmAA, struct2ryAll, by = c("tId"="fName"))
 mmAAtoSave <- mmAA2ndry
 mmAAtoSave$maxRper15 <- do.call(rbind, mmAAtoSave$maxRper15)
 mmAAtoSave$maxRper15 <- data.frame(mmAAtoSave$maxRper15)
-names(mmAAtoSave) <- c("tId", "gId", "seq", "subseq", "length", "Rc", "Rp", "sublength", "maxRper15", "macExp", "sigPep", "Prediction", "Confidence")
+names(mmAAtoSave) <- c("tId", "gId", "seq", "subseq", "sublength", "Rc", "Rp", "maxRper15", "macExp", "sigPep", "Prediction", "Confidence")
 #write.table(mmAAtoSave, file.path(outdir, "finalAADataframe.txt"), sep = "\t", quote=F, row.name=F)
 save(mmAAtoSave, file=file.path(outdir, "mmAAFinal_buildDF1.RData"))
 

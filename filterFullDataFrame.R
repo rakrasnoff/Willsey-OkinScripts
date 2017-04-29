@@ -13,6 +13,14 @@
 ##hexSplitdf: dataframe form of hexSplitList
 ##mmAA2cut: with all cut pieces of helixes and sequences, then filtered by R content on hexes; final DF
 
+require(Biostrings)
+options(stringsAsFactors = FALSE)
+library(stringr)
+library(dplyr)
+library(plyr)
+library(zoo)
+library(seqRFLP)
+library(org.Mm.eg.db)
 library(seqRFLP)
 
 #############################################################################
@@ -21,30 +29,26 @@ datdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline1/data"
 wrkdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline1/working"
 outdir <- "~/Dropbox/WillseyLab/CPPs/Pipeline1/output"
 
-#Load macrophage expression data for enrichment analysis
-maxMac <- read.delim(file.path(datdir, "topQuartMacGenes.txt"))
-
 #mmAA <- read.delim(file.path(datdir, "mmAAFinal_buildDF1.txt"))
 load(file.path(datdir, "mmAAFinal_buildDF1.RData"))
 mmAA <- mmAAtoSave
 head(mmAA)
 names(mmAA)
-dim(mmAA) #52659 x 13
+dim(mmAA) #61440 12
 
 #############################################################################
 #2. Filter by R content (sliding window)
 #mmAA$maxRper15 <- as.list(mmAA$maxRper15)
 head(mmAA)
-names(mmAAR) <- c("tId", "gId", "seq", "subseq", "length", "Rc", "Rp", "sublength", "maxRper8", "macExp", "sigPep", "Prediction", "Confidence")
 mmAAR <- mmAA[mmAA$maxRper15 > 0, ]
 dim(mmAA)
-dim(mmAAR) #51875 x 13
+dim(mmAAR) #60587 12
 head(mmAAR)
 mmAAR$keep <- 0
-mmAAR$keep[mmAAR$length < 15] <- 1
-mmAAR$keep[mmAAR$length >= 15 & mmAAR$maxRper15 >= 4] <- 1
+mmAAR$keep[mmAAR$sublength < 15] <- 1
+mmAAR$keep[mmAAR$sublength >= 15 & mmAAR$maxRper15 >= 4] <- 1
 mmAAR <- subset(mmAAR, keep == 1)
-dim(mmAAR) #25525 x 14
+dim(mmAAR) #29705 x 14
 head(mmAAR)
 
 save(mmAAR, file=file.path(wrkdir, "mmAAfilteredbyR.RData"))
@@ -63,16 +67,16 @@ sum(mmAAME$keep)
 mmAASP <- mmAAR
 mmAASP <- subset(mmAASP, sigPep == "Y")
 dim(mmAASP)
-#2938
+#3381 (instead of 2981)
 
 save(mmAASP, file=file.path(wrkdir, "mmAAfilteredbyR_SRP.RData"))
 #saved version: no macrophage expression filter
 #which of these do I have secondary structure predictions for
 head(mmAASP)
-sum(is.na(mmAASP$Prediction) == T) #953 are missing
+sum(is.na(mmAASP$Prediction) == T) #1399 are missing
 missingPreds <- mmAASP[is.na(mmAASP$Prediction),]
 dim(missingPreds)
-missingFasta = dataframe2fas(missingPreds[,c(1,4)], file=file.path(datdir, "missingPreds953.Fa"))
+missingFasta = dataframe2fas(missingPreds[,c(1,4)], file=file.path(datdir, "missingPreds1399.Fa"))
 
 #############################################################################
 #3.Filter by Secondary Structure
@@ -80,12 +84,12 @@ head(mmAASP)
 mmAASS <- mmAASP
 mmAASS$helix <- 0
 maxRper15 <- data.frame(mmAASS$tId, mmAASS$maxRper15)
-mmAASS <- mmAASS[,-9] #removing maxes, saved to their own dataframe
+mmAASS <- mmAASS[,-8] #removing maxes, saved to their own dataframe
 mmAASS <- mutate(mmAASS, helix = str_count(mmAASS$Prediction, "H"))
 head(mmAASS)
 
 mmAASS <- mmAASS[mmAASS$helix != 0,]
-dim(mmAASS) #this brings me to 2860; however, 953 are still NA
+dim(mmAASS) #this brings me to 3303; however, 1399 are still NA
 
 save(mmAASS, file=file.path(wrkdir, "mmAAfilteredbyR_SRP_H.RData"))
 
@@ -124,23 +128,23 @@ names(hexSplitList) <- mmAApred$tId[1:nrow(mmAApred)]
 hexSplitdf <- do.call(rbind, hexSplitList)
 hexSplitdf$tId <- do.call(rbind, strsplit(rownames(hexSplitdf), "[.]"))[,1]
 head(hexSplitdf)
-dim(hexSplitdf)
+dim(hexSplitdf) #1203
 
 save(hexSplitdf, file=file.path(wrkdir, "hexSplitdf.RData"))
 
 #merge info with sequences
 mmAA2merge <- data.frame(tId = mmAApred$tId, subseq = mmAApred$subseq)
 mmAA2cut <- full_join(hexSplitdf, mmAA2merge)
-dim(mmAA2cut) #12319
-dim(trialdf)
+dim(mmAA2cut) #12303
+dim(hexSplitdf) #12303
 mmAA2cut <- mutate(mmAA2cut, hseq = substring(subseq, start, end))
 head(mmAA2cut)
 mmAA2cut <- mutate(mmAA2cut, Rs = str_count(hseq, "R"))
 mmAA2cut <- mutate(mmAA2cut, length = str_count(hseq))
 mmAA2cut <- mutate(mmAA2cut, percent = (Rs/length)*100)
 mmAA2cut <- filter(mmAA2cut, percent > 0)
-dim(mmAA2cut) #5928 x 8
-length(unique(mmAA2cut$tId)) #1589 
+dim(mmAA2cut) #5923 x 8
+length(unique(mmAA2cut$tId)) #1586 
 
 countRs <- function(mmAA) {
   aastring <- AAString(mmAA)
@@ -155,11 +159,10 @@ mmAA2cut$keep <- 0
 mmAA2cut$keep[mmAA2cut$length < 8] <- 1
 mmAA2cut$keep[mmAA2cut$length >= 8 & mmAA2cut$maxRper8 >= 2] <- 1
 mmAA2cut <- subset(mmAA2cut, keep == 1)
-dim(mmAA2cut) #2730
-length(unique(mmAA2cut$tId)) #1256
+dim(mmAA2cut) #2728
+length(unique(mmAA2cut$tId)) #1255
 #merge with other data
 maxRper8 <- data.frame(tId2=mmAA2cut$tId, maxRper8=do.call(rbind, mmAA2cut$maxRper8))
-mmAA2cut <- mmAA2cut[,-9]
 
 mmAAfiltered <- left_join(mmAA2cut, mmAApred, by=c("tId"="tId"))
 dim(mmAA2cut)
@@ -168,10 +171,10 @@ mmAAfiltered <- cbind(mmAAfiltered, maxRper8)
 sum(mmAAfiltered$tId == mmAAfiltered$tId2)
 dim(mmAAfiltered)
 head(mmAAfiltered)
-mmAAfiltered <- data.frame(gId=mmAAfiltered$gId, tId=mmAAfiltered$tId, subseq=mmAAfiltered$subseq.x, sublength=mmAAfiltered$sublength, sigPep=mmAAfiltered$sigPep, macExp=mmAAfiltered$macExp, Prediction=mmAAfiltered$Prediction, helix=mmAAfiltered$helix, hseq=mmAAfiltered$hseq, hlength=mmAAfiltered$length.x, hexRs=mmAAfiltered$Rs, percentRhex=mmAAfiltered$percent, maxRper8hex=mmAAfiltered$maxRper8)
+mmAAfiltered <- data.frame(gId=mmAAfiltered$gId, tId=mmAAfiltered$tId, subseq=mmAAfiltered$subseq.x, sublength=mmAAfiltered$sublength, sigPep=mmAAfiltered$sigPep, macExp=mmAAfiltered$macExp, Prediction=mmAAfiltered$Prediction, helix=mmAAfiltered$helix, hseq=mmAAfiltered$hseq, hlength=mmAAfiltered$length, hexRs=mmAAfiltered$Rs, percentRhex=mmAAfiltered$percent)
 dim(mmAAfiltered)
-sum(!duplicated(mmAAfiltered$tId))
-sum(!duplicated(mmAAfiltered$gId))
+sum(!duplicated(mmAAfiltered$tId)) #1255
+sum(!duplicated(mmAAfiltered$gId)) #934
 
 tIds <- unique(mmAAfiltered$tId) 
 
